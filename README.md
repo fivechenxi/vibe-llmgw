@@ -45,6 +45,7 @@ cd web && npm install && npm run dev   # 访问 http://localhost:5173
 
 ## 文档
 
-- [Architecture.md](./Architecture.md) — 目录结构、请求处理流程
-- [api.md](./api.md) — REST API 完整定义
-- [Design.md](./Design.md) — 需求与系统设计
+- [docs/Architecture.md](./docs/Architecture.md) — 目录结构、请求处理流程
+- [docs/api.md](./docs/api.md) — REST API 完整定义
+- [docs/Design.md](./docs/Design.md) — 需求与系统设计
+- [docs/TESTING.md](./docs/TESTING.md) — 测试方法与运行命令
