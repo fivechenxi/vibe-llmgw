@@ -1,7 +1,6 @@
 package providers
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"strings"
@@ -18,6 +17,9 @@ func newAnthropicForTest(t *testing.T) *AnthropicProvider {
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 	if apiKey == "" {
 		t.Skip("ANTHROPIC_API_KEY not set, skipping integration test")
+	}
+	if !strings.HasPrefix(apiKey, "sk-ant-") {
+		t.Skip("ANTHROPIC_API_KEY does not look like a valid Anthropic key, skipping integration test")
 	}
 	return NewAnthropicProvider(apiKey, os.Getenv("HTTP_PROXY"))
 }
@@ -98,7 +100,6 @@ func TestAnthropicStream(t *testing.T) {
 
 	p.streamWithWriter(
 		context.Background(),
-		&bytes.Buffer{},
 		"test-user",
 		req,
 		q,

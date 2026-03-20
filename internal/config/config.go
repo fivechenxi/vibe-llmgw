@@ -7,6 +7,7 @@ import (
 )
 
 type Config struct {
+	Env       string // development | production (default: development)
 	Server    ServerConfig
 	Database  DatabaseConfig
 	JWT       JWTConfig

@@ -41,10 +41,15 @@ func NewOpenAIProvider(apiKey, baseURL, proxyURL string) *OpenAIProvider {
 
 // ---- OpenAI wire types ----
 
+type openAIStreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
+}
+
 type openAIRequest struct {
-	Model    string          `json:"model"`
-	Messages []domain.Message `json:"messages"`
-	Stream   bool            `json:"stream,omitempty"`
+	Model         string               `json:"model"`
+	Messages      []domain.Message     `json:"messages"`
+	Stream        bool                 `json:"stream,omitempty"`
+	StreamOptions *openAIStreamOptions `json:"stream_options,omitempty"`
 }
 
 type openAIResponse struct {
@@ -156,9 +161,10 @@ func (p *OpenAIProvider) streamWithWriter(
 	onChunk func(string),
 ) {
 	payload := openAIRequest{
-		Model:    req.Model,
-		Messages: req.Messages,
-		Stream:   true,
+		Model:         req.Model,
+		Messages:      req.Messages,
+		Stream:        true,
+		StreamOptions: &openAIStreamOptions{IncludeUsage: true},
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

@@ -170,7 +170,7 @@ func (p *AnthropicProvider) Stream(c *gin.Context, userID string, req *domain.Ch
 	c.Header("Cache-Control", "no-cache")
 	c.Header("X-Accel-Buffering", "no")
 
-	p.streamWithWriter(c.Request.Context(), c.Writer, userID, req, q, logger, func(chunk string) {
+	p.streamWithWriter(c.Request.Context(), userID, req, q, logger, func(chunk string) {
 		c.SSEvent("", chunk)
 		c.Writer.Flush()
 	})
@@ -180,7 +180,6 @@ func (p *AnthropicProvider) Stream(c *gin.Context, userID string, req *domain.Ch
 // onChunk is called for each text delta and for the final "[DONE]" sentinel.
 func (p *AnthropicProvider) streamWithWriter(
 	ctx context.Context,
-	_ io.Writer,
 	userID string,
 	req *domain.ChatRequest,
 	q QuotaDeductor,

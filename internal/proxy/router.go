@@ -19,9 +19,10 @@ type Router struct {
 func NewRouter(cfg *config.Config) *Router {
 	r := &Router{routes: make(map[string]Provider)}
 
-	// mock provider — always registered for local development
-	mock := providers.NewMockProvider()
-	r.routes["mock"] = mock
+	// mock provider — only in non-production environments
+	if cfg.Env != "production" {
+		r.routes["mock"] = providers.NewMockProvider()
+	}
 
 	openai := providers.NewOpenAIProvider(cfg.Providers.OpenAI.APIKey, cfg.Providers.OpenAI.BaseURL, cfg.Proxy)
 	for _, m := range []string{"gpt-4o", "gpt-4o-mini"} {
