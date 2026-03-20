@@ -1,6 +1,9 @@
 server:
   port: 8080
 
+# outbound HTTP proxy for LLM provider API calls (leave empty for direct connection)
+proxy: ""
+
 database:
   dsn: "postgres://user:password@localhost:5432/llmgw?sslmode=disable"
 

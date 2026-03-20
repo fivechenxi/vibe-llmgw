@@ -7,11 +7,12 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
-	SSO      SSOConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
+	JWT       JWTConfig
+	SSO       SSOConfig
 	Providers ProvidersConfig
+	Proxy     string // outbound HTTP proxy for LLM provider calls, e.g. http://127.0.0.1:10809
 }
 
 type ServerConfig struct {

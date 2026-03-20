@@ -24,7 +24,7 @@ func NewRouter(cfg *config.Config) *Router {
 		r.routes[m] = openai
 	}
 
-	anthropic := providers.NewAnthropicProvider(cfg.Providers.Anthropic.APIKey)
+	anthropic := providers.NewAnthropicProvider(cfg.Providers.Anthropic.APIKey, cfg.Proxy)
 	for _, m := range []string{"claude-3-5-sonnet", "claude-3-haiku"} {
 		r.routes[m] = anthropic
 	}
