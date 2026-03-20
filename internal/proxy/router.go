@@ -53,3 +53,8 @@ func (r *Router) Get(modelID string) (Provider, error) {
 	}
 	return p, nil
 }
+
+// Register adds or overrides a provider mapping. Used in tests.
+func (r *Router) Register(modelID string, p Provider) {
+	r.routes[modelID] = p
+}

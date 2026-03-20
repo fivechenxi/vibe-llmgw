@@ -1,30 +1,49 @@
 package proxy
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/yourorg/llmgw/internal/chat"
 	"github.com/yourorg/llmgw/internal/config"
 	"github.com/yourorg/llmgw/internal/domain"
 	"github.com/yourorg/llmgw/internal/middleware"
 	"github.com/yourorg/llmgw/internal/quota"
 )
 
-type Handler struct {
-	cfg      *config.Config
-	quotaSvc *quota.Service
-	chatRepo *chat.Repository
-	router   *Router
+// QuotaService is the interface the handler needs from the quota layer.
+type QuotaService interface {
+	Check(ctx context.Context, userID, modelID string) error
+	Deduct(ctx context.Context, userID, modelID string, tokens int) error
 }
 
-func NewHandler(cfg *config.Config, quotaSvc *quota.Service, chatRepo *chat.Repository) *Handler {
+// ChatSaver is the interface the handler needs to persist logs.
+type ChatSaver interface {
+	Save(ctx context.Context, log *domain.ChatLog) error
+}
+
+// ProviderRouter resolves a model ID to its Provider.
+type ProviderRouter interface {
+	Get(modelID string) (Provider, error)
+}
+
+type Handler struct {
+	quotaSvc QuotaService
+	chatSave ChatSaver
+	router   ProviderRouter
+}
+
+func NewHandler(cfg *config.Config, quotaSvc QuotaService, chatSave ChatSaver) *Handler {
 	return &Handler{
-		cfg:      cfg,
 		quotaSvc: quotaSvc,
-		chatRepo: chatRepo,
+		chatSave: chatSave,
 		router:   NewRouter(cfg),
 	}
+}
+
+// newHandlerWithRouter is used in tests to inject a custom router.
+func newHandlerWithRouter(quotaSvc QuotaService, chatSave ChatSaver, router ProviderRouter) *Handler {
+	return &Handler{quotaSvc: quotaSvc, chatSave: chatSave, router: router}
 }
 
 func (h *Handler) Chat(c *gin.Context) {
@@ -53,9 +72,9 @@ func (h *Handler) Chat(c *gin.Context) {
 		return
 	}
 
-	// 3. Call provider (streaming or not)
+	// 3. Call provider
 	if req.Stream {
-		provider.Stream(c, userID, &req, h.quotaSvc, h.chatRepo)
+		provider.Stream(c, userID, &req, h.quotaSvc, h.chatSave)
 		return
 	}
 
@@ -65,8 +84,8 @@ func (h *Handler) Chat(c *gin.Context) {
 		return
 	}
 
-	// 4. Async deduct quota
-	go h.quotaSvc.Deduct(c.Request.Context(), userID, req.Model, resp.Usage.TotalTokens)
+	// 4. Deduct quota async (use Background to avoid cancelled request context)
+	go h.quotaSvc.Deduct(context.Background(), userID, req.Model, resp.Usage.TotalTokens)
 
 	c.JSON(http.StatusOK, resp)
 }
