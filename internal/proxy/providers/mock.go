@@ -1,0 +1,103 @@
+package providers
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/yourorg/llmgw/internal/domain"
+)
+
+// MockProvider is a local provider for development and testing.
+// It returns deterministic responses without any network calls.
+type MockProvider struct {
+	// Response overrides the default echo response if set.
+	Response string
+	// Delay simulates network latency per stream chunk.
+	Delay time.Duration
+}
+
+func NewMockProvider() *MockProvider {
+	return &MockProvider{Delay: 30 * time.Millisecond}
+}
+
+func (p *MockProvider) Complete(_ context.Context, _ string, req *domain.ChatRequest) (*domain.ChatResponse, error) {
+	content := p.replyFor(req)
+	words := len(strings.Fields(content))
+	return &domain.ChatResponse{
+		Content: content,
+		Usage: domain.TokenUsage{
+			InputTokens:  p.countInputTokens(req),
+			OutputTokens: words,
+			TotalTokens:  p.countInputTokens(req) + words,
+		},
+	}, nil
+}
+
+func (p *MockProvider) Stream(c *gin.Context, userID string, req *domain.ChatRequest, q QuotaDeductor, logger ChatLogger) {
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("X-Accel-Buffering", "no")
+
+	content := p.replyFor(req)
+	words := strings.Fields(content)
+	requestAt := time.Now()
+	var built strings.Builder
+
+	for _, word := range words {
+		chunk := word + " "
+		built.WriteString(chunk)
+		c.SSEvent("", chunk)
+		c.Writer.Flush()
+		if p.Delay > 0 {
+			time.Sleep(p.Delay)
+		}
+	}
+	c.SSEvent("", "[DONE]")
+	c.Writer.Flush()
+
+	inputTokens := p.countInputTokens(req)
+	outputTokens := len(words)
+	sessionID, _ := uuid.Parse(req.SessionID)
+
+	go func() {
+		ctx := context.Background()
+		_ = q.Deduct(ctx, userID, req.Model, inputTokens+outputTokens)
+		_ = logger.Save(ctx, &domain.ChatLog{
+			ID:              uuid.New(),
+			UserID:          userID,
+			SessionID:       sessionID,
+			ModelID:         req.Model,
+			RequestAt:       requestAt,
+			ResponseAt:      time.Now(),
+			ResponseContent: built.String(),
+			InputTokens:     inputTokens,
+			OutputTokens:    outputTokens,
+			Status:          "success",
+		})
+	}()
+}
+
+func (p *MockProvider) replyFor(req *domain.ChatRequest) string {
+	if p.Response != "" {
+		return p.Response
+	}
+	last := ""
+	for _, m := range req.Messages {
+		if m.Role == "user" {
+			last = m.Content
+		}
+	}
+	return fmt.Sprintf("[mock:%s] echo: %s", req.Model, last)
+}
+
+func (p *MockProvider) countInputTokens(req *domain.ChatRequest) int {
+	total := 0
+	for _, m := range req.Messages {
+		total += len(strings.Fields(m.Content))
+	}
+	return total
+}
