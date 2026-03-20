@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+database:
+  dsn: "postgres://user:password@localhost:5432/llmgw?sslmode=disable"
+
+jwt:
+  secret: "change-me-in-production"
+  expire_hours: 8
+
+sso:
+  provider: "wechat_work"   # wechat_work | ldap | saml
+  wechat_work:
+    corp_id: ""
+    agent_id: ""
+    secret: ""
+
+providers:
+  openai:
+    api_key: ""
+    base_url: "https://api.openai.com/v1"
+  anthropic:
+    api_key: ""
+  deepseek:
+    api_key: ""
+    base_url: "https://api.deepseek.com/v1"
+  alibaba:
+    api_key: ""
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  baidu:
+    api_key: ""
+    secret_key: ""
