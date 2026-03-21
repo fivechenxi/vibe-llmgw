@@ -14,6 +14,9 @@ var ErrQuotaExceeded = errors.New("quota exceeded")
 type quotaRepo interface {
 	Get(ctx context.Context, userID, modelID string) (*domain.UserQuota, error)
 	Deduct(ctx context.Context, userID, modelID string, tokens int) error
+	// TryDeduct atomically checks remaining quota and deducts in one operation.
+	// Returns ErrQuotaExceeded if the quota is exhausted or the row is missing.
+	TryDeduct(ctx context.Context, userID, modelID string, tokens int) error
 }
 
 type Service struct {
@@ -37,6 +40,14 @@ func (s *Service) Check(ctx context.Context, userID, modelID string) error {
 }
 
 // Deduct subtracts consumed tokens after a successful request.
+// See Repository.Deduct for the TOCTOU caveat.
 func (s *Service) Deduct(ctx context.Context, userID, modelID string, tokens int) error {
 	return s.repo.Deduct(ctx, userID, modelID, tokens)
+}
+
+// TryDeduct atomically verifies remaining quota and deducts tokens in a single
+// database round-trip.  Prefer this over Check+Deduct when strict per-request
+// enforcement is required; it eliminates the TOCTOU race and replica-lag risk.
+func (s *Service) TryDeduct(ctx context.Context, userID, modelID string, tokens int) error {
+	return s.repo.TryDeduct(ctx, userID, modelID, tokens)
 }

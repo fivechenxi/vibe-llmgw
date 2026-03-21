@@ -12,10 +12,11 @@ import (
 // ---- stub repo ----
 
 type stubRepo struct {
-	quota    *domain.UserQuota
-	getErr   error
-	deducted int
-	deductErr error
+	quota        *domain.UserQuota
+	getErr       error
+	deducted     int
+	deductErr    error
+	tryDeductErr error
 }
 
 func (s *stubRepo) Get(_ context.Context, _, _ string) (*domain.UserQuota, error) {
@@ -25,6 +26,22 @@ func (s *stubRepo) Get(_ context.Context, _, _ string) (*domain.UserQuota, error
 func (s *stubRepo) Deduct(_ context.Context, _, _ string, tokens int) error {
 	s.deducted += tokens
 	return s.deductErr
+}
+
+func (s *stubRepo) TryDeduct(_ context.Context, _, _ string, tokens int) error {
+	if s.tryDeductErr != nil {
+		return s.tryDeductErr
+	}
+	// Simulate atomic check: apply only if remaining > 0.
+	if s.quota == nil {
+		return ErrQuotaExceeded
+	}
+	if s.quota.Remaining() <= 0 {
+		return ErrQuotaExceeded
+	}
+	s.quota.UsedTokens += int64(tokens)
+	s.deducted += tokens
+	return nil
 }
 
 func newService(repo quotaRepo) *Service {
@@ -144,6 +161,50 @@ func TestService_Deduct_ZeroTokens(t *testing.T) {
 	}
 	if repo.deducted != 0 {
 		t.Errorf("expected 0 deducted, got %d", repo.deducted)
+	}
+}
+
+// ---- Service.TryDeduct unit tests ----
+
+func TestService_TryDeduct_HasQuota(t *testing.T) {
+	repo := &stubRepo{quota: &domain.UserQuota{QuotaTokens: 1000, UsedTokens: 400}}
+	svc := newService(repo)
+	if err := svc.TryDeduct(context.Background(), "user1", "gpt-4o", 200); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+	if repo.deducted != 200 {
+		t.Errorf("expected 200 deducted, got %d", repo.deducted)
+	}
+}
+
+func TestService_TryDeduct_QuotaExhausted(t *testing.T) {
+	repo := &stubRepo{quota: &domain.UserQuota{QuotaTokens: 100, UsedTokens: 100}}
+	svc := newService(repo)
+	if err := svc.TryDeduct(context.Background(), "user1", "gpt-4o", 1); !errors.Is(err, ErrQuotaExceeded) {
+		t.Errorf("expected ErrQuotaExceeded, got %v", err)
+	}
+	if repo.deducted != 0 {
+		t.Error("deducted should be 0 when quota is exhausted")
+	}
+}
+
+func TestService_TryDeduct_NoRow(t *testing.T) {
+	repo := &stubRepo{} // quota == nil
+	svc := newService(repo)
+	if err := svc.TryDeduct(context.Background(), "ghost", "gpt-4o", 1); !errors.Is(err, ErrQuotaExceeded) {
+		t.Errorf("expected ErrQuotaExceeded for missing row, got %v", err)
+	}
+}
+
+func TestService_TryDeduct_RepoError(t *testing.T) {
+	dbErr := errors.New("connection lost")
+	repo := &stubRepo{
+		quota:        &domain.UserQuota{QuotaTokens: 1000, UsedTokens: 0},
+		tryDeductErr: dbErr,
+	}
+	svc := newService(repo)
+	if err := svc.TryDeduct(context.Background(), "user1", "gpt-4o", 100); !errors.Is(err, dbErr) {
+		t.Errorf("expected repo error to propagate, got %v", err)
 	}
 }
 
