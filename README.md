@@ -23,6 +23,29 @@ An internal enterprise AI chat platform that proxies multiple LLM provider APIs 
 
 ## Quick Start
 
+### Option 1: Docker Compose (Recommended for Testing)
+
+The fastest way to get started — no manual database setup required.
+
+```bash
+# Start test environment (PostgreSQL + LLM Gateway)
+./test/docker/setup-test-env.sh up
+
+# Run API demo with mock model
+./test/scripts/demo-chat.sh
+
+# Stop environment
+./test/docker/setup-test-env.sh down
+```
+
+This starts:
+- **PostgreSQL** on port 5433
+- **LLM Gateway** on port 8080
+
+Test users: `alice` (has quota), `bob` (exhausted), `charlie` (no quota)
+
+### Option 2: Manual Setup
+
 **Prerequisites:** Go 1.22+, Node.js 18+, PostgreSQL 14+
 
 ```bash
@@ -51,3 +74,4 @@ cd web && npm install && npm run dev   # http://localhost:5173
 - [docs/api.md](./docs/api.md) — REST API reference
 - [docs/Design.md](./docs/Design.md) — Requirements and system design (Chinese)
 - [docs/TESTING.md](./docs/TESTING.md) — How to run tests
+- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) — Docker deployment guide
