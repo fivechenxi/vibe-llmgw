@@ -1,15 +1,24 @@
 package chat
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/yourorg/llmgw/internal/domain"
 	"github.com/yourorg/llmgw/internal/middleware"
 )
 
+// chatRepo is the narrow interface Handler needs from the persistence layer.
+// *Repository satisfies it; tests can substitute a stub.
+type chatRepo interface {
+	ListSessions(ctx context.Context, userID string) ([]uuid.UUID, error)
+	GetSession(ctx context.Context, userID string, sessionID uuid.UUID) ([]domain.ChatLog, error)
+}
+
 type Handler struct {
-	repo *Repository
+	repo chatRepo
 }
 
 func NewHandler(repo *Repository) *Handler {
