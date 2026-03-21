@@ -116,7 +116,7 @@ func (h *Handler) Chat(c *gin.Context) {
 			SessionID:       sessionID,
 			ModelID:         req.Model,
 			RequestAt:       requestAt,
-			ResponseAt:      responseAt,
+			ResponseAt:      &responseAt,
 			RequestMessages: reqMsgJSON,
 			ResponseContent: resp.Content,
 			InputTokens:     resp.Usage.InputTokens,

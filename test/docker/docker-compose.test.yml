@@ -1,0 +1,63 @@
+# LLM Gateway Black-box Test Environment
+# Usage:
+#   docker compose -f test/docker/docker-compose.test.yml up --build
+#   docker compose -f test/docker/docker-compose.test.yml down -v
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: llmgw-test-db
+    environment:
+      POSTGRES_USER: llmgw
+      POSTGRES_PASSWORD: llmgw_test_password
+      POSTGRES_DB: llmgw_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./seed-test-data.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llmgw -d llmgw_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  llmgw:
+    build:
+      context: ../..
+      dockerfile: test/docker/Dockerfile
+    container_name: llmgw-test-server
+    ports:
+      - "8080:8080"
+    environment:
+      # Override database connection
+      DATABASE_DSN: "postgres://llmgw:llmgw_test_password@postgres:5432/llmgw_test?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/auth/login"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Test runner container (optional, for running black-box tests)
+  test-runner:
+    image: golang:1.24-alpine
+    container_name: llmgw-test-runner
+    working_dir: /app
+    volumes:
+      - ../..:/app
+    environment:
+      TEST_API_BASE: "http://llmgw:8080"
+      TEST_DATABASE_URL: "postgres://llmgw:llmgw_test_password@postgres:5432/llmgw_test?sslmode=disable"
+      TEST_JWT_SECRET: "test-jwt-secret-for-blackbox-testing"
+    depends_on:
+      llmgw:
+        condition: service_healthy
+    command: ["tail", "-f", "/dev/null"]  # Keep container running for manual test execution
+
+volumes:
+  postgres_data:

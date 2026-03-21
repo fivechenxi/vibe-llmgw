@@ -258,13 +258,14 @@ func (p *AnthropicProvider) streamWithWriter(
 	go func() {
 		bgCtx := context.Background()
 		_ = q.Deduct(bgCtx, userID, req.Model, total)
+		responseAt := time.Now()
 		_ = logger.Save(bgCtx, &domain.ChatLog{
 			ID:              uuid.New(),
 			UserID:          userID,
 			SessionID:       sessionID,
 			ModelID:         req.Model,
 			RequestAt:       requestAt,
-			ResponseAt:      time.Now(),
+			ResponseAt:      &responseAt,
 			RequestMessages: reqMsgJSON,
 			ResponseContent: fullContent.String(),
 			InputTokens:     inputTokens,

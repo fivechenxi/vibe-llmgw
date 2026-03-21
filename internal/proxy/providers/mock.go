@@ -75,7 +75,7 @@ func (p *MockProvider) Stream(c *gin.Context, userID string, req *domain.ChatReq
 			SessionID:       sessionID,
 			ModelID:         req.Model,
 			RequestAt:       requestAt,
-			ResponseAt:      responseAt,
+			ResponseAt:      &responseAt,
 			RequestMessages: reqMsgJSON,
 			ResponseContent: built.String(),
 			InputTokens:     inputTokens,

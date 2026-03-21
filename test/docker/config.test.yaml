@@ -1,0 +1,33 @@
+# LLM Gateway Test Configuration
+# Used for Docker-based black-box testing environment
+
+env: test
+
+server:
+  port: "8080"
+
+database:
+  dsn: "postgres://llmgw:llmgw_test_password@postgres:5432/llmgw_test?sslmode=disable"
+
+jwt:
+  secret: "test-jwt-secret-for-blackbox-testing"
+  expire_hours: 24
+
+sso:
+  provider: "mock"  # Mock SSO for testing
+
+providers:
+  openai:
+    api_key: "mock-openai-key"
+    base_url: "https://api.openai.com/v1"
+  anthropic:
+    api_key: "mock-anthropic-key"
+  deepseek:
+    api_key: "mock-deepseek-key"
+  alibaba:
+    api_key: "mock-alibaba-key"
+  baidu:
+    api_key: "mock-baidu-key"
+    secret_key: "mock-baidu-secret"
+
+proxy: ""  # No proxy for test environment
