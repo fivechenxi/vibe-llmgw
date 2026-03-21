@@ -527,6 +527,50 @@ HTTP_PROXY="..." \
 
 ---
 
+## 黑盒测试（API 契约测试）
+
+测试文件：`test/blackbox/blackbox_test.go`、`test/blackbox/TESTCASES.md`
+
+黑盒测试基于 `docs/api.md` 定义的 API 契约，验证 HTTP 接口的功能正确性，不依赖内部实现细节。所有外部依赖（数据库、LLM Provider）均使用 Mock 实现。
+
+### 测试范围
+
+| 模块 | 测试项 |
+|------|--------|
+| Auth | Login 重定向、Callback 返回、Logout 成功 |
+| JWT Middleware | 有效 Token 通过、无效/过期/错误签名 Token 拒绝 |
+| Models | 获取可用模型列表、过滤耗尽模型、Repo 错误处理 |
+| Quota | 获取 Quota 详情、包含耗尽模型 |
+| Chat (非流式) | 完整对话、多轮对话、Session-Sticky、参数校验、Quota 耗尽、无 Credential |
+| Chat (流式) | SSE 响应格式、data 格式、[DONE] 标记 |
+| Sessions | 获取会话列表、获取会话详情、无效 UUID |
+| Router | 已知模型路由、未知模型错误、注册自定义模型、覆盖模型 |
+| Credential | Session-Sticky 一致性、Round-Robin 循环、并发安全 |
+
+### 运行黑盒测试
+
+```bash
+# 运行所有黑盒测试
+/opt/homebrew/bin/go test ./test/blackbox/ -v -timeout 60s
+
+# 运行特定模块测试
+/opt/homebrew/bin/go test ./test/blackbox/ -v -run TestAuth -timeout 30s
+/opt/homebrew/bin/go test ./test/blackbox/ -v -run TestJWT -timeout 30s
+/opt/homebrew/bin/go test ./test/blackbox/ -v -run TestChat -timeout 30s
+/opt/homebrew/bin/go test ./test/blackbox/ -v -run TestRouter -timeout 30s
+/opt/homebrew/bin/go test ./test/blackbox/ -v -run TestCredential -timeout 30s
+```
+
+### 测试用例设计文档
+
+详细的测试用例设计见 `test/blackbox/TESTCASES.md`，包含：
+- 55 个测试用例定义
+- 认证 + API 组合矩阵
+- Chat 请求参数矩阵
+- 边界条件和错误处理覆盖
+
+---
+
 ## 测试统计
 
 | 类型 | 数量 |
@@ -535,7 +579,8 @@ HTTP_PROXY="..." \
 | 模块测试 | 23 |
 | 集成测试 | 20 (需 DB/API) |
 | 系统测试 | 30 |
-| **总计** | **165** |
+| 黑盒测试 | 55 |
+| **总计** | **220** |
 
 ---
 
