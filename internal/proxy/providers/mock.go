@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -37,7 +38,7 @@ func (p *MockProvider) Complete(_ context.Context, _ string, req *domain.ChatReq
 	}, nil
 }
 
-func (p *MockProvider) Stream(c *gin.Context, userID string, req *domain.ChatRequest, _ *domain.ModelCredential, q QuotaDeductor, logger ChatLogger) {
+func (p *MockProvider) Stream(c *gin.Context, userID string, req *domain.ChatRequest, cred *domain.ModelCredential, q QuotaDeductor, logger ChatLogger) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("X-Accel-Buffering", "no")
@@ -61,7 +62,9 @@ func (p *MockProvider) Stream(c *gin.Context, userID string, req *domain.ChatReq
 
 	inputTokens := p.countInputTokens(req)
 	outputTokens := len(words)
+	responseAt := time.Now()
 	sessionID, _ := uuid.Parse(req.SessionID)
+	reqMsgJSON, _ := json.Marshal(req.Messages)
 
 	go func() {
 		ctx := context.Background()
@@ -72,11 +75,13 @@ func (p *MockProvider) Stream(c *gin.Context, userID string, req *domain.ChatReq
 			SessionID:       sessionID,
 			ModelID:         req.Model,
 			RequestAt:       requestAt,
-			ResponseAt:      time.Now(),
+			ResponseAt:      responseAt,
+			RequestMessages: reqMsgJSON,
 			ResponseContent: built.String(),
 			InputTokens:     inputTokens,
 			OutputTokens:    outputTokens,
 			Status:          "success",
+			CredentialID:    &cred.ID,
 		})
 	}()
 }

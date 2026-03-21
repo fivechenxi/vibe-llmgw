@@ -200,6 +200,7 @@ func (p *AnthropicProvider) streamWithWriter(
 		return
 	}
 
+	requestAt := time.Now()
 	resp, err := p.doRequest(ctx, cred.APIKey, body)
 	if err != nil {
 		onChunk("[ERROR] " + err.Error())
@@ -207,11 +208,11 @@ func (p *AnthropicProvider) streamWithWriter(
 	}
 	defer resp.Body.Close()
 
-	requestAt := time.Now()
 	var fullContent strings.Builder
 	var inputTokens, outputTokens int
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 512*1024), 512*1024) // 512 KB per line — handles large content blocks
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data:") {
@@ -244,6 +245,10 @@ func (p *AnthropicProvider) streamWithWriter(
 		case "message_stop":
 			onChunk("[DONE]")
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		onChunk("[ERROR] stream read error: " + err.Error())
 	}
 
 	total := inputTokens + outputTokens

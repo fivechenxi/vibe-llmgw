@@ -102,6 +102,7 @@ func (h *Handler) Chat(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	responseAt := time.Now() // capture before goroutine to record provider latency accurately
 
 	// 5. Deduct quota and save log async (Background avoids cancelled request context)
 	reqMsgJSON, _ := json.Marshal(req.Messages)
@@ -115,7 +116,7 @@ func (h *Handler) Chat(c *gin.Context) {
 			SessionID:       sessionID,
 			ModelID:         req.Model,
 			RequestAt:       requestAt,
-			ResponseAt:      time.Now(),
+			ResponseAt:      responseAt,
 			RequestMessages: reqMsgJSON,
 			ResponseContent: resp.Content,
 			InputTokens:     resp.Usage.InputTokens,
