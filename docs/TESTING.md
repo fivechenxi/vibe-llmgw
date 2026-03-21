@@ -571,6 +571,94 @@ HTTP_PROXY="..." \
 
 ---
 
+## E2E 端到端测试（需 Docker 环境）
+
+测试文件：`test/e2e/e2e_test.go`
+
+E2E 测试验证完整的 HTTP 请求流程，需要运行中的 LLM Gateway 服务和 PostgreSQL 数据库。使用 Docker Compose 搭建测试环境。
+
+### 测试范围
+
+| 模块 | 测试项 |
+|------|--------|
+| Health Check | 服务健康检查 |
+| Auth | Login 重定向、Logout 成功 |
+| JWT Middleware | 缺少 Token、过期 Token |
+| Models | 获取可用模型列表、无 Quota 用户 |
+| Quota | 获取 Quota 详情 |
+| Chat (非流式) | 完整对话、Quota 耗尽 |
+| Chat (流式) | SSE 响应格式 |
+| Sessions | 获取会话列表、获取会话详情、无效 UUID |
+| Session-Sticky | 相同 Session 路由一致性 |
+| Database | 测试数据验证 |
+
+### 测试用例详情
+
+| 用例ID | 测试名 | 验证内容 |
+|--------|--------|----------|
+| E2E-001 | TestE2E_HealthCheck | 服务可达，返回 302 重定向 |
+| E2E-002 | TestE2E_Auth_Login | Login 返回 302 重定向到 SSO |
+| E2E-003 | TestE2E_Auth_Logout | Logout 返回 200 |
+| E2E-004 | TestE2E_JWT_MissingToken | 无 Token 返回 401 |
+| E2E-005 | TestE2E_JWT_ExpiredToken | 过期 Token 返回 401 |
+| E2E-006 | TestE2E_Models_ListModels | 返回有剩余 quota 的模型列表 |
+| E2E-007 | TestE2E_Models_ListModels_EmptyForNoQuota | 无 quota 用户返回空列表 |
+| E2E-008 | TestE2E_Quota_List | 返回所有 quota 记录 |
+| E2E-009 | TestE2E_Chat_Complete | 非流式对话返回正确内容和 token 统计 |
+| E2E-010 | TestE2E_Chat_QuotaExceeded | quota 耗尽返回 403 |
+| E2E-011 | TestE2E_Chat_Stream | 流式对话返回 SSE 格式 |
+| E2E-012 | TestE2E_Sessions_List | 返回用户会话列表 |
+| E2E-013 | TestE2E_Sessions_Get | 返回会话详细消息 |
+| E2E-014 | TestE2E_Sessions_InvalidUUID | 无效 UUID 返回 400 |
+| E2E-015 | TestE2E_Chat_SessionSticky | 相同 session_id 多次请求路由一致 |
+| E2E-016 | TestE2E_Database_HasTestData | 数据库包含测试数据 |
+
+### 环境搭建
+
+```bash
+# 启动测试环境
+./test/docker/setup-test-env.sh up
+
+# 或手动启动
+docker compose -f test/docker/docker-compose.test.yml up -d
+```
+
+### 运行 E2E 测试
+
+```bash
+# 使用脚本运行
+./test/docker/setup-test-env.sh test
+
+# 或手动运行
+export TEST_API_BASE="http://localhost:8080"
+export TEST_JWT_SECRET="test-jwt-secret-for-blackbox-testing"
+export TEST_DATABASE_URL="postgres://llmgw:llmgw_test_password@localhost:5433/llmgw_test?sslmode=disable"
+/opt/homebrew/bin/go test ./test/e2e/... -v -timeout 60s
+```
+
+### 测试环境
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| LLM Gateway | 8080 | HTTP API 服务 |
+| PostgreSQL | 5433 | 测试数据库 |
+
+### 测试数据
+
+| 用户 ID | Email | Quota 状态 |
+|---------|-------|-----------|
+| alice | alice@test.com | mock: 100万, gpt-4o: 49万 |
+| bob | bob@test.com | mock: 已耗尽 |
+| charlie | charlie@test.com | 无 quota |
+
+### 停止测试环境
+
+```bash
+./test/docker/setup-test-env.sh down
+```
+
+---
+
 ## 测试统计
 
 | 类型 | 数量 |
@@ -580,7 +668,8 @@ HTTP_PROXY="..." \
 | 集成测试 | 20 (需 DB/API) |
 | 系统测试 | 30 |
 | 黑盒测试 | 55 |
-| **总计** | **220** |
+| E2E 测试 | 17 |
+| **总计** | **237** |
 
 ---
 
