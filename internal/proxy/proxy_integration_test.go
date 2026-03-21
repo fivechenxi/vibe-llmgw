@@ -58,11 +58,19 @@ func (s *inMemorySaver) Save(_ context.Context, l *domain.ChatLog) error {
 	return nil
 }
 
+// fixedCredSel always returns a dummy credential; satisfies CredentialSelector.
+type fixedCredSel struct{}
+
+func (f *fixedCredSel) Pick(_ context.Context, _, _ string) (*domain.ModelCredential, error) {
+	id := 1
+	return &domain.ModelCredential{ID: id, APIKey: "test-key"}, nil
+}
+
 // newIntegrationEngine wires a real Handler + real Router (mock provider registered).
 // Returns the engine and router so individual tests can call router.Register if needed.
 func newIntegrationEngine(q QuotaService, saver ChatSaver) (*gin.Engine, *Router) {
 	router := NewRouter(&config.Config{})
-	h := &Handler{quotaSvc: q, chatSave: saver, router: router}
+	h := &Handler{quotaSvc: q, chatSave: saver, router: router, credSel: &fixedCredSel{}}
 
 	engine := gin.New()
 	engine.POST("/api/chat", func(c *gin.Context) {
@@ -111,9 +119,19 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 		t.Error("expected non-zero token usage")
 	}
 
-	time.Sleep(50 * time.Millisecond) // deduct runs in goroutine
+	time.Sleep(50 * time.Millisecond) // deduct and save run in goroutine
 	if q.deducted["alice:mock"] == 0 {
 		t.Error("expected quota to be deducted")
+	}
+	// Verify SSO user ↔ backend credential binding recorded in chat log
+	if len(saver.logs) == 0 {
+		t.Fatal("expected chat log to be saved")
+	}
+	if saver.logs[0].CredentialID == nil {
+		t.Error("expected CredentialID to be set in chat log")
+	}
+	if saver.logs[0].UserID != "alice" {
+		t.Errorf("expected UserID=alice, got %q", saver.logs[0].UserID)
 	}
 }
 

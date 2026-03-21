@@ -12,17 +12,19 @@ import (
 
 // newOpenAIForTest reads OPENAI_API_KEY and HTTP_PROXY from env.
 // Tests are skipped if OPENAI_API_KEY is not set.
-func newOpenAIForTest(t *testing.T) *OpenAIProvider {
+func newOpenAIForTest(t *testing.T) (*OpenAIProvider, *domain.ModelCredential) {
 	t.Helper()
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
 		t.Skip("OPENAI_API_KEY not set, skipping integration test")
 	}
-	return NewOpenAIProvider(apiKey, "https://api.openai.com/v1", os.Getenv("HTTP_PROXY"))
+	p := NewOpenAIProvider("https://api.openai.com/v1", os.Getenv("HTTP_PROXY"))
+	cred := &domain.ModelCredential{ID: 1, APIKey: apiKey}
+	return p, cred
 }
 
 func TestOpenAIComplete(t *testing.T) {
-	p := newOpenAIForTest(t)
+	p, cred := newOpenAIForTest(t)
 
 	req := &domain.ChatRequest{
 		Model: "gpt-4o-mini",
@@ -31,7 +33,7 @@ func TestOpenAIComplete(t *testing.T) {
 		},
 	}
 
-	resp, err := p.Complete(context.Background(), "test-user", req)
+	resp, err := p.Complete(context.Background(), "test-user", req, cred)
 	if err != nil {
 		t.Fatalf("Complete error: %v", err)
 	}
@@ -54,7 +56,7 @@ func TestOpenAIComplete(t *testing.T) {
 }
 
 func TestOpenAIStream(t *testing.T) {
-	p := newOpenAIForTest(t)
+	p, cred := newOpenAIForTest(t)
 
 	req := &domain.ChatRequest{
 		Model: "gpt-4o-mini",
@@ -74,6 +76,7 @@ func TestOpenAIStream(t *testing.T) {
 		context.Background(),
 		"test-user",
 		req,
+		cred,
 		q,
 		log,
 		func(chunk string) {

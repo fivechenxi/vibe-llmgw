@@ -21,13 +21,13 @@ const anthropicBaseURL = "https://api.anthropic.com/v1/messages"
 const anthropicVersion = "2023-06-01"
 
 // AnthropicProvider handles the Anthropic Messages API.
+// The API key is NOT stored here; it is supplied per-request via ModelCredential.
 type AnthropicProvider struct {
-	apiKey     string
 	httpClient *http.Client
 }
 
 // NewAnthropicProvider creates a provider; proxyURL may be empty to use direct connection.
-func NewAnthropicProvider(apiKey, proxyURL string) *AnthropicProvider {
+func NewAnthropicProvider(proxyURL string) *AnthropicProvider {
 	transport := &http.Transport{}
 	if proxyURL != "" {
 		if parsed, err := url.Parse(proxyURL); err == nil {
@@ -35,7 +35,6 @@ func NewAnthropicProvider(apiKey, proxyURL string) *AnthropicProvider {
 		}
 	}
 	return &AnthropicProvider{
-		apiKey:     apiKey,
 		httpClient: &http.Client{Transport: transport, Timeout: 120 * time.Second},
 	}
 }
@@ -101,20 +100,20 @@ func toAnthropicMessages(msgs []domain.Message) (system string, out []anthropicM
 	return
 }
 
-func (p *AnthropicProvider) doRequest(ctx context.Context, body []byte) (*http.Response, error) {
+func (p *AnthropicProvider) doRequest(ctx context.Context, apiKey string, body []byte) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicBaseURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", p.apiKey)
+	req.Header.Set("x-api-key", apiKey)
 	req.Header.Set("anthropic-version", anthropicVersion)
 	return p.httpClient.Do(req)
 }
 
 // ---- Complete (non-streaming) ----
 
-func (p *AnthropicProvider) Complete(ctx context.Context, userID string, req *domain.ChatRequest) (*domain.ChatResponse, error) {
+func (p *AnthropicProvider) Complete(ctx context.Context, userID string, req *domain.ChatRequest, cred *domain.ModelCredential) (*domain.ChatResponse, error) {
 	system, msgs := toAnthropicMessages(req.Messages)
 
 	payload := anthropicRequest{
@@ -128,7 +127,7 @@ func (p *AnthropicProvider) Complete(ctx context.Context, userID string, req *do
 		return nil, err
 	}
 
-	resp, err := p.doRequest(ctx, body)
+	resp, err := p.doRequest(ctx, cred.APIKey, body)
 	if err != nil {
 		return nil, err
 	}
@@ -165,12 +164,12 @@ func (p *AnthropicProvider) Complete(ctx context.Context, userID string, req *do
 // ---- Stream (SSE) ----
 
 // Stream implements Provider. It writes SSE directly to the gin response.
-func (p *AnthropicProvider) Stream(c *gin.Context, userID string, req *domain.ChatRequest, q QuotaDeductor, logger ChatLogger) {
+func (p *AnthropicProvider) Stream(c *gin.Context, userID string, req *domain.ChatRequest, cred *domain.ModelCredential, q QuotaDeductor, logger ChatLogger) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("X-Accel-Buffering", "no")
 
-	p.streamWithWriter(c.Request.Context(), userID, req, q, logger, func(chunk string) {
+	p.streamWithWriter(c.Request.Context(), userID, req, cred, q, logger, func(chunk string) {
 		c.SSEvent("", chunk)
 		c.Writer.Flush()
 	})
@@ -182,6 +181,7 @@ func (p *AnthropicProvider) streamWithWriter(
 	ctx context.Context,
 	userID string,
 	req *domain.ChatRequest,
+	cred *domain.ModelCredential,
 	q QuotaDeductor,
 	logger ChatLogger,
 	onChunk func(string),
@@ -200,7 +200,7 @@ func (p *AnthropicProvider) streamWithWriter(
 		return
 	}
 
-	resp, err := p.doRequest(ctx, body)
+	resp, err := p.doRequest(ctx, cred.APIKey, body)
 	if err != nil {
 		onChunk("[ERROR] " + err.Error())
 		return
@@ -265,6 +265,7 @@ func (p *AnthropicProvider) streamWithWriter(
 			InputTokens:     inputTokens,
 			OutputTokens:    outputTokens,
 			Status:          "success",
+			CredentialID:    &cred.ID,
 		})
 	}()
 }

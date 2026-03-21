@@ -7,6 +7,7 @@ import (
 	"github.com/yourorg/llmgw/internal/auth"
 	"github.com/yourorg/llmgw/internal/chat"
 	"github.com/yourorg/llmgw/internal/config"
+	"github.com/yourorg/llmgw/internal/credential"
 	"github.com/yourorg/llmgw/internal/db"
 	"github.com/yourorg/llmgw/internal/middleware"
 	"github.com/yourorg/llmgw/internal/model"
@@ -30,9 +31,12 @@ func main() {
 	chatRepo := chat.NewRepository(database)
 	modelRepo := model.NewRepository(database)
 
+	credRepo := credential.NewRepository(database)
+	credSel := credential.NewRoundRobinSelector(credRepo)
+
 	// Handlers
 	authHandler := auth.NewHandler(cfg, database)
-	proxyHandler := proxy.NewHandler(cfg, quotaSvc, chatRepo)
+	proxyHandler := proxy.NewHandler(cfg, quotaSvc, chatRepo, credSel)
 	chatHandler := chat.NewHandler(chatRepo)
 	modelHandler := model.NewHandler(modelRepo, quotaRepo)
 

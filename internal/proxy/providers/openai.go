@@ -18,14 +18,14 @@ import (
 )
 
 // OpenAIProvider handles OpenAI-compatible APIs (OpenAI, DeepSeek, Alibaba Qwen, etc.)
+// The API key is NOT stored here; it is supplied per-request via ModelCredential.
 type OpenAIProvider struct {
-	apiKey     string
 	baseURL    string
 	httpClient *http.Client
 }
 
 // NewOpenAIProvider creates a provider; proxyURL may be empty for direct connection.
-func NewOpenAIProvider(apiKey, baseURL, proxyURL string) *OpenAIProvider {
+func NewOpenAIProvider(baseURL, proxyURL string) *OpenAIProvider {
 	transport := &http.Transport{}
 	if proxyURL != "" {
 		if parsed, err := url.Parse(proxyURL); err == nil {
@@ -33,7 +33,6 @@ func NewOpenAIProvider(apiKey, baseURL, proxyURL string) *OpenAIProvider {
 		}
 	}
 	return &OpenAIProvider{
-		apiKey:     apiKey,
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		httpClient: &http.Client{Transport: transport, Timeout: 120 * time.Second},
 	}
@@ -85,20 +84,20 @@ type openAIStreamChunk struct {
 
 // ---- helpers ----
 
-func (p *OpenAIProvider) doRequest(ctx context.Context, body []byte) (*http.Response, error) {
+func (p *OpenAIProvider) doRequest(ctx context.Context, apiKey string, body []byte) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		p.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
 	return p.httpClient.Do(req)
 }
 
 // ---- Complete (non-streaming) ----
 
-func (p *OpenAIProvider) Complete(ctx context.Context, userID string, req *domain.ChatRequest) (*domain.ChatResponse, error) {
+func (p *OpenAIProvider) Complete(ctx context.Context, userID string, req *domain.ChatRequest, cred *domain.ModelCredential) (*domain.ChatResponse, error) {
 	payload := openAIRequest{
 		Model:    req.Model,
 		Messages: req.Messages,
@@ -108,7 +107,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, userID string, req *domai
 		return nil, err
 	}
 
-	resp, err := p.doRequest(ctx, body)
+	resp, err := p.doRequest(ctx, cred.APIKey, body)
 	if err != nil {
 		return nil, err
 	}
@@ -140,12 +139,12 @@ func (p *OpenAIProvider) Complete(ctx context.Context, userID string, req *domai
 
 // ---- Stream (SSE) ----
 
-func (p *OpenAIProvider) Stream(c *gin.Context, userID string, req *domain.ChatRequest, q QuotaDeductor, logger ChatLogger) {
+func (p *OpenAIProvider) Stream(c *gin.Context, userID string, req *domain.ChatRequest, cred *domain.ModelCredential, q QuotaDeductor, logger ChatLogger) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("X-Accel-Buffering", "no")
 
-	p.streamWithWriter(c.Request.Context(), userID, req, q, logger, func(chunk string) {
+	p.streamWithWriter(c.Request.Context(), userID, req, cred, q, logger, func(chunk string) {
 		c.SSEvent("", chunk)
 		c.Writer.Flush()
 	})
@@ -156,6 +155,7 @@ func (p *OpenAIProvider) streamWithWriter(
 	ctx context.Context,
 	userID string,
 	req *domain.ChatRequest,
+	cred *domain.ModelCredential,
 	q QuotaDeductor,
 	logger ChatLogger,
 	onChunk func(string),
@@ -172,7 +172,7 @@ func (p *OpenAIProvider) streamWithWriter(
 		return
 	}
 
-	resp, err := p.doRequest(ctx, body)
+	resp, err := p.doRequest(ctx, cred.APIKey, body)
 	if err != nil {
 		onChunk("[ERROR] " + err.Error())
 		return
@@ -241,6 +241,7 @@ func (p *OpenAIProvider) streamWithWriter(
 			InputTokens:     inputTokens,
 			OutputTokens:    outputTokens,
 			Status:          "success",
+			CredentialID:    &cred.ID,
 		})
 	}()
 }

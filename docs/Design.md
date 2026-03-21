@@ -93,7 +93,44 @@ user_quota:
 
 > 注：当前版本暂不实现实时限速（rate limiting），仅做 quota 总量控制。
 
-### 3.3 LLM Proxy 模块
+### 3.3 后端账号池与 Key 选取
+
+每个模型对应一个后端 API 账号池（多个 Key），请求到达时用 **Round Robin** 从池中选出一个账号，实现负载分散和单账号限速规避。
+
+**账号池数据结构：**
+```
+model_credentials:
+  id: int                  // 自增主键
+  model_id: string         // 关联 models.id
+  api_key: string          // 加密存储
+  label: string            // 备注，如 "account-1"
+  is_active: bool          // 是否启用
+  created_at: timestamp
+```
+
+**Round Robin 选取流程：**
+```
+收到请求，目标 model_id = "gpt-4o"
+  → 从 model_credentials 查出该 model 的所有 active key
+  → 用原子计数器 counter[model_id] % len(keys) 选出当前 key
+  → counter[model_id]++
+  → 用选出的 key 发起 Provider API 调用
+  → 将 credential_id 写入本次 chat_log（建立前端用户与后端账号的绑定记录）
+```
+
+> 计数器存在内存中（进程级），重启后从 0 开始，满足初版需求。后续可迁移至原子 DB 序列或 Redis 以支持多实例。
+
+**SSO 用户与后端账号绑定：**
+
+每条 `chat_log` 同时记录 `user_id`（SSO 身份）和 `credential_id`（实际使用的后端 Key），形成完整的审计链路：
+```
+前端 SSO 用户 alice  ──请求──▶  credential_id=3 (gpt-4o / account-2)
+```
+管理员可按 `credential_id` 聚合查询某个后端账号的实际用量，也可按 `user_id` 追溯某用户使用了哪些后端账号。
+
+---
+
+### 3.4 LLM Proxy 模块
 
 参考 [LiteLLM](https://github.com/BerriAI/litellm) 设计思路，将各 LLM Provider 的 API 格式统一为 OpenAI Chat Completions 格式。
 
@@ -110,13 +147,13 @@ user_quota:
 **Proxy 处理流程：**
 ```
 用户请求 (统一格式)
-  → 验证 JWT
+  → 验证 JWT（提取 SSO user_id）
   → 检查 Quota
-  → 记录请求日志
+  → Round Robin 从账号池选出 credential（记录 credential_id）
   → 转换为目标 Provider 格式
-  → 调用 Provider API（使用后端统一 API Key）
+  → 用 credential.api_key 调用 Provider API
   → 转换响应为统一格式
-  → 记录响应日志 + 扣减 token
+  → 异步：扣减 token + 保存 chat_log（含 user_id + credential_id）
   → 返回给用户
 ```
 
@@ -176,6 +213,18 @@ CREATE TABLE models (
   is_active   BOOLEAN DEFAULT TRUE
 );
 
+-- 后端账号池（每个模型可配置多个 API Key）
+CREATE TABLE model_credentials (
+  id          SERIAL PRIMARY KEY,
+  model_id    VARCHAR(64) REFERENCES models(id),
+  api_key     TEXT NOT NULL,           -- 建议加密存储
+  label       VARCHAR(255),            -- 备注，如 "account-1"
+  is_active   BOOLEAN DEFAULT TRUE,
+  created_at  TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_model_credentials_model_id ON model_credentials(model_id);
+
 -- 用户 Quota 表
 CREATE TABLE user_quotas (
   id            SERIAL PRIMARY KEY,
@@ -201,7 +250,8 @@ CREATE TABLE chat_logs (
   input_tokens      INT DEFAULT 0,
   output_tokens     INT DEFAULT 0,
   status            VARCHAR(32),
-  error_message     TEXT
+  error_message     TEXT,
+  credential_id     INT REFERENCES model_credentials(id)  -- 本次使用的后端账号
 );
 
 CREATE INDEX idx_chat_logs_user_id ON chat_logs(user_id);

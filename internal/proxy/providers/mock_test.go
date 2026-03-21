@@ -16,7 +16,7 @@ func TestMockComplete(t *testing.T) {
 		Messages: []domain.Message{{Role: "user", Content: "hello"}},
 	}
 
-	resp, err := p.Complete(context.Background(), "user1", req)
+	resp, err := p.Complete(context.Background(), "user1", req, &domain.ModelCredential{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestMockCompleteCustomResponse(t *testing.T) {
 		Messages: []domain.Message{{Role: "user", Content: "ping"}},
 	}
 
-	resp, err := p.Complete(context.Background(), "user1", req)
+	resp, err := p.Complete(context.Background(), "user1", req, &domain.ModelCredential{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestMockStream(t *testing.T) {
 	doneSeen = true // simulated
 
 	// Also verify Complete returns the same content
-	resp, err := p.Complete(context.Background(), "user1", req)
+	resp, err := p.Complete(context.Background(), "user1", req, &domain.ModelCredential{})
 	if err != nil {
 		t.Fatalf("Complete error: %v", err)
 	}

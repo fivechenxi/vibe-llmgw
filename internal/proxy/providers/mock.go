@@ -24,7 +24,7 @@ func NewMockProvider() *MockProvider {
 	return &MockProvider{Delay: 30 * time.Millisecond}
 }
 
-func (p *MockProvider) Complete(_ context.Context, _ string, req *domain.ChatRequest) (*domain.ChatResponse, error) {
+func (p *MockProvider) Complete(_ context.Context, _ string, req *domain.ChatRequest, _ *domain.ModelCredential) (*domain.ChatResponse, error) {
 	content := p.replyFor(req)
 	words := len(strings.Fields(content))
 	return &domain.ChatResponse{
@@ -37,7 +37,7 @@ func (p *MockProvider) Complete(_ context.Context, _ string, req *domain.ChatReq
 	}, nil
 }
 
-func (p *MockProvider) Stream(c *gin.Context, userID string, req *domain.ChatRequest, q QuotaDeductor, logger ChatLogger) {
+func (p *MockProvider) Stream(c *gin.Context, userID string, req *domain.ChatRequest, _ *domain.ModelCredential, q QuotaDeductor, logger ChatLogger) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("X-Accel-Buffering", "no")

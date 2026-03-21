@@ -9,9 +9,10 @@ import (
 
 // Provider is the unified interface all LLM backends implement.
 // Both streaming and non-streaming paths are required.
+// cred carries the backend API key selected for this specific request.
 type Provider interface {
-	Complete(ctx context.Context, userID string, req *domain.ChatRequest) (*domain.ChatResponse, error)
-	Stream(c *gin.Context, userID string, req *domain.ChatRequest, quotaDeductor QuotaDeductor, logger ChatLogger)
+	Complete(ctx context.Context, userID string, req *domain.ChatRequest, cred *domain.ModelCredential) (*domain.ChatResponse, error)
+	Stream(c *gin.Context, userID string, req *domain.ChatRequest, cred *domain.ModelCredential, quotaDeductor QuotaDeductor, logger ChatLogger)
 }
 
 // QuotaDeductor is a narrow interface so providers can deduct tokens without importing the quota package.

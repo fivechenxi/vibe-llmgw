@@ -31,23 +31,30 @@ type ProviderRouter interface {
 	Get(modelID string) (Provider, error)
 }
 
-type Handler struct {
-	quotaSvc QuotaService
-	chatSave ChatSaver
-	router   ProviderRouter
+// CredentialSelector picks a backend API credential for a given model and session.
+type CredentialSelector interface {
+	Pick(ctx context.Context, modelID, sessionID string) (*domain.ModelCredential, error)
 }
 
-func NewHandler(cfg *config.Config, quotaSvc QuotaService, chatSave ChatSaver) *Handler {
+type Handler struct {
+	quotaSvc   QuotaService
+	chatSave   ChatSaver
+	router     ProviderRouter
+	credSel    CredentialSelector
+}
+
+func NewHandler(cfg *config.Config, quotaSvc QuotaService, chatSave ChatSaver, credSel CredentialSelector) *Handler {
 	return &Handler{
 		quotaSvc: quotaSvc,
 		chatSave: chatSave,
 		router:   NewRouter(cfg),
+		credSel:  credSel,
 	}
 }
 
-// newHandlerWithRouter is used in tests to inject a custom router.
-func newHandlerWithRouter(quotaSvc QuotaService, chatSave ChatSaver, router ProviderRouter) *Handler {
-	return &Handler{quotaSvc: quotaSvc, chatSave: chatSave, router: router}
+// newHandlerWithRouter is used in tests to inject a custom router and selector.
+func newHandlerWithRouter(quotaSvc QuotaService, chatSave ChatSaver, router ProviderRouter, credSel CredentialSelector) *Handler {
+	return &Handler{quotaSvc: quotaSvc, chatSave: chatSave, router: router, credSel: credSel}
 }
 
 func (h *Handler) Chat(c *gin.Context) {
@@ -76,20 +83,27 @@ func (h *Handler) Chat(c *gin.Context) {
 		return
 	}
 
-	// 3. Call provider
+	// 3. Pick a backend credential (session-sticky hash or round-robin)
+	cred, err := h.credSel.Pick(c.Request.Context(), req.Model, req.SessionID)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "no available credential for model"})
+		return
+	}
+
+	// 4. Call provider
 	if req.Stream {
-		provider.Stream(c, userID, &req, h.quotaSvc, h.chatSave)
+		provider.Stream(c, userID, &req, cred, h.quotaSvc, h.chatSave)
 		return
 	}
 
 	requestAt := time.Now()
-	resp, err := provider.Complete(c.Request.Context(), userID, &req)
+	resp, err := provider.Complete(c.Request.Context(), userID, &req, cred)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 4. Deduct quota and save log async (Background avoids cancelled request context)
+	// 5. Deduct quota and save log async (Background avoids cancelled request context)
 	reqMsgJSON, _ := json.Marshal(req.Messages)
 	sessionID, _ := uuid.Parse(req.SessionID)
 	go func() {
@@ -107,6 +121,7 @@ func (h *Handler) Chat(c *gin.Context) {
 			InputTokens:     resp.Usage.InputTokens,
 			OutputTokens:    resp.Usage.OutputTokens,
 			Status:          "success",
+			CredentialID:    &cred.ID,
 		})
 	}()
 

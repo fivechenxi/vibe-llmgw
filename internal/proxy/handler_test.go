@@ -57,6 +57,21 @@ func (s *stubRouter) Get(_ string) (Provider, error) {
 	return s.provider, nil
 }
 
+// stubCredSel always returns a dummy credential.
+type stubCredSel struct {
+	failWith error
+}
+
+func (s *stubCredSel) Pick(_ context.Context, _, _ string) (*domain.ModelCredential, error) {
+	if s.failWith != nil {
+		return nil, s.failWith
+	}
+	id := 1
+	return &domain.ModelCredential{ID: id, APIKey: "test-key"}, nil
+}
+
+var defaultCredSel = &stubCredSel{}
+
 // newTestEngine returns a gin engine with the handler wired up and userID pre-set.
 func newTestEngine(h *Handler) *gin.Engine {
 	r := gin.New()
@@ -83,7 +98,7 @@ func TestHandlerChat_Complete(t *testing.T) {
 	q := &stubQuota{}
 	saver := &stubChatSaver{}
 
-	h := newHandlerWithRouter(q, saver, &stubRouter{provider: mock})
+	h := newHandlerWithRouter(q, saver, &stubRouter{provider: mock}, defaultCredSel)
 	w := postChat(newTestEngine(h), map[string]interface{}{
 		"model":    "mock",
 		"messages": []map[string]string{{"role": "user", "content": "hi"}},
@@ -102,15 +117,35 @@ func TestHandlerChat_Complete(t *testing.T) {
 		t.Errorf("unexpected content: %q", resp.Content)
 	}
 
-	// Deduct is async — give the goroutine a moment
+	// Deduct and Save are async — give the goroutine a moment
 	time.Sleep(50 * time.Millisecond)
 	if q.deducted == 0 {
 		t.Error("expected quota to be deducted")
 	}
+	// Verify credential_id is bound in the saved chat log (SSO ↔ backend account link)
+	if len(saver.saved) == 0 {
+		t.Fatal("expected chat log to be saved")
+	}
+	if saver.saved[0].CredentialID == nil || *saver.saved[0].CredentialID != 1 {
+		t.Errorf("expected CredentialID=1 in chat log, got %v", saver.saved[0].CredentialID)
+	}
+}
+
+func TestHandlerChat_CredentialUnavailable(t *testing.T) {
+	mock := &providers.MockProvider{Response: "hello"}
+	credSel := &stubCredSel{failWith: errors.New("no credentials configured")}
+	h := newHandlerWithRouter(&stubQuota{}, &stubChatSaver{}, &stubRouter{provider: mock}, credSel)
+	w := postChat(newTestEngine(h), map[string]interface{}{
+		"model":    "mock",
+		"messages": []map[string]string{{"role": "user", "content": "hi"}},
+	})
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d", w.Code)
+	}
 }
 
 func TestHandlerChat_BadRequest_MissingModel(t *testing.T) {
-	h := newHandlerWithRouter(&stubQuota{}, &stubChatSaver{}, &stubRouter{})
+	h := newHandlerWithRouter(&stubQuota{}, &stubChatSaver{}, &stubRouter{}, defaultCredSel)
 	w := postChat(newTestEngine(h), map[string]interface{}{
 		// "model" intentionally omitted
 		"messages": []map[string]string{{"role": "user", "content": "hi"}},
@@ -122,7 +157,7 @@ func TestHandlerChat_BadRequest_MissingModel(t *testing.T) {
 
 func TestHandlerChat_QuotaExceeded(t *testing.T) {
 	q := &stubQuota{checkErr: quota.ErrQuotaExceeded}
-	h := newHandlerWithRouter(q, &stubChatSaver{}, &stubRouter{provider: providers.NewMockProvider()})
+	h := newHandlerWithRouter(q, &stubChatSaver{}, &stubRouter{provider: providers.NewMockProvider()}, defaultCredSel)
 	w := postChat(newTestEngine(h), map[string]interface{}{
 		"model":    "mock",
 		"messages": []map[string]string{{"role": "user", "content": "hi"}},
@@ -134,7 +169,7 @@ func TestHandlerChat_QuotaExceeded(t *testing.T) {
 
 func TestHandlerChat_QuotaServiceError(t *testing.T) {
 	q := &stubQuota{checkErr: errors.New("db down")}
-	h := newHandlerWithRouter(q, &stubChatSaver{}, &stubRouter{provider: providers.NewMockProvider()})
+	h := newHandlerWithRouter(q, &stubChatSaver{}, &stubRouter{provider: providers.NewMockProvider()}, defaultCredSel)
 	w := postChat(newTestEngine(h), map[string]interface{}{
 		"model":    "mock",
 		"messages": []map[string]string{{"role": "user", "content": "hi"}},
@@ -145,7 +180,7 @@ func TestHandlerChat_QuotaServiceError(t *testing.T) {
 }
 
 func TestHandlerChat_UnsupportedModel(t *testing.T) {
-	h := newHandlerWithRouter(&stubQuota{}, &stubChatSaver{}, &stubRouter{missing: true})
+	h := newHandlerWithRouter(&stubQuota{}, &stubChatSaver{}, &stubRouter{missing: true}, defaultCredSel)
 	w := postChat(newTestEngine(h), map[string]interface{}{
 		"model":    "no-such-model",
 		"messages": []map[string]string{{"role": "user", "content": "hi"}},
@@ -157,7 +192,7 @@ func TestHandlerChat_UnsupportedModel(t *testing.T) {
 
 func TestHandlerChat_Stream(t *testing.T) {
 	mock := &providers.MockProvider{Response: "streamed response"}
-	h := newHandlerWithRouter(&stubQuota{}, &stubChatSaver{}, &stubRouter{provider: mock})
+	h := newHandlerWithRouter(&stubQuota{}, &stubChatSaver{}, &stubRouter{provider: mock}, defaultCredSel)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"model":    "mock",

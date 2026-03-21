@@ -20,6 +20,15 @@ type Model struct {
 	IsActive bool   `db:"is_active"`
 }
 
+type ModelCredential struct {
+	ID        int       `db:"id"`
+	ModelID   string    `db:"model_id"`
+	APIKey    string    `db:"api_key"`
+	Label     string    `db:"label"`
+	IsActive  bool      `db:"is_active"`
+	CreatedAt time.Time `db:"created_at"`
+}
+
 type UserQuota struct {
 	ID          int       `db:"id"`
 	UserID      string    `db:"user_id"`
@@ -47,6 +56,7 @@ type ChatLog struct {
 	OutputTokens    int       `db:"output_tokens"`
 	Status          string    `db:"status"` // success | quota_exceeded | error
 	ErrorMessage    string    `db:"error_message"`
+	CredentialID    *int      `db:"credential_id"` // backend account used for this request
 }
 
 // Chat request/response types shared across handlers and proxy

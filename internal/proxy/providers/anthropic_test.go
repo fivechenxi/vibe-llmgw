@@ -10,9 +10,9 @@ import (
 	"github.com/yourorg/llmgw/internal/domain"
 )
 
-// newAnthropicForTest returns a provider using ANTHROPIC_API_KEY and HTTP_PROXY env vars.
+// newAnthropicForTest returns a provider and credential using ANTHROPIC_API_KEY and HTTP_PROXY env vars.
 // Tests are skipped if ANTHROPIC_API_KEY is not set.
-func newAnthropicForTest(t *testing.T) *AnthropicProvider {
+func newAnthropicForTest(t *testing.T) (*AnthropicProvider, *domain.ModelCredential) {
 	t.Helper()
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 	if apiKey == "" {
@@ -21,12 +21,14 @@ func newAnthropicForTest(t *testing.T) *AnthropicProvider {
 	if !strings.HasPrefix(apiKey, "sk-ant-") {
 		t.Skip("ANTHROPIC_API_KEY does not look like a valid Anthropic key, skipping integration test")
 	}
-	return NewAnthropicProvider(apiKey, os.Getenv("HTTP_PROXY"))
+	p := NewAnthropicProvider(os.Getenv("HTTP_PROXY"))
+	cred := &domain.ModelCredential{ID: 1, APIKey: apiKey}
+	return p, cred
 }
 
 // TestAnthropicComplete tests the non-streaming path.
 func TestAnthropicComplete(t *testing.T) {
-	p := newAnthropicForTest(t)
+	p, cred := newAnthropicForTest(t)
 
 	req := &domain.ChatRequest{
 		Model: "claude-haiku-4-5",
@@ -35,7 +37,7 @@ func TestAnthropicComplete(t *testing.T) {
 		},
 	}
 
-	resp, err := p.Complete(context.Background(), "test-user", req)
+	resp, err := p.Complete(context.Background(), "test-user", req, cred)
 	if err != nil {
 		t.Fatalf("Complete error: %v", err)
 	}
@@ -60,7 +62,7 @@ func TestAnthropicComplete(t *testing.T) {
 // TestAnthropicCompleteWithSystem verifies that a system message is correctly
 // extracted and sent as the top-level "system" field.
 func TestAnthropicCompleteWithSystem(t *testing.T) {
-	p := newAnthropicForTest(t)
+	p, cred := newAnthropicForTest(t)
 
 	req := &domain.ChatRequest{
 		Model: "claude-haiku-4-5",
@@ -70,7 +72,7 @@ func TestAnthropicCompleteWithSystem(t *testing.T) {
 		},
 	}
 
-	resp, err := p.Complete(context.Background(), "test-user", req)
+	resp, err := p.Complete(context.Background(), "test-user", req, cred)
 	if err != nil {
 		t.Fatalf("Complete error: %v", err)
 	}
@@ -82,7 +84,7 @@ func TestAnthropicCompleteWithSystem(t *testing.T) {
 
 // TestAnthropicStream tests the streaming path via streamWithWriter.
 func TestAnthropicStream(t *testing.T) {
-	p := newAnthropicForTest(t)
+	p, cred := newAnthropicForTest(t)
 
 	req := &domain.ChatRequest{
 		Model: "claude-haiku-4-5",
@@ -102,6 +104,7 @@ func TestAnthropicStream(t *testing.T) {
 		context.Background(),
 		"test-user",
 		req,
+		cred,
 		q,
 		log,
 		func(chunk string) {

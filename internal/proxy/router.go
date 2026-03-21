@@ -24,22 +24,22 @@ func NewRouter(cfg *config.Config) *Router {
 		r.routes["mock"] = providers.NewMockProvider()
 	}
 
-	openai := providers.NewOpenAIProvider(cfg.Providers.OpenAI.APIKey, cfg.Providers.OpenAI.BaseURL, cfg.Proxy)
+	openai := providers.NewOpenAIProvider(cfg.Providers.OpenAI.BaseURL, cfg.Proxy)
 	for _, m := range []string{"gpt-4o", "gpt-4o-mini"} {
 		r.routes[m] = openai
 	}
 
-	anthropic := providers.NewAnthropicProvider(cfg.Providers.Anthropic.APIKey, cfg.Proxy)
+	anthropic := providers.NewAnthropicProvider(cfg.Proxy)
 	for _, m := range []string{"claude-3-5-sonnet", "claude-3-haiku", "claude-haiku-4-5"} {
 		r.routes[m] = anthropic
 	}
 
-	deepseek := providers.NewOpenAIProvider(cfg.Providers.DeepSeek.APIKey, cfg.Providers.DeepSeek.BaseURL, cfg.Proxy)
+	deepseek := providers.NewOpenAIProvider(cfg.Providers.DeepSeek.BaseURL, cfg.Proxy)
 	for _, m := range []string{"deepseek-v3", "deepseek-r1"} {
 		r.routes[m] = deepseek
 	}
 
-	alibaba := providers.NewOpenAIProvider(cfg.Providers.Alibaba.APIKey, cfg.Providers.Alibaba.BaseURL, cfg.Proxy)
+	alibaba := providers.NewOpenAIProvider(cfg.Providers.Alibaba.BaseURL, cfg.Proxy)
 	for _, m := range []string{"qwen-max", "qwen-plus"} {
 		r.routes[m] = alibaba
 	}
