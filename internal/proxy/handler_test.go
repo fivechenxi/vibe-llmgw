@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,22 +28,35 @@ func init() {
 
 type stubQuota struct {
 	checkErr error
-	deducted int
+	deducted atomic.Int64
 }
 
 func (s *stubQuota) Check(_ context.Context, _, _ string) error { return s.checkErr }
 func (s *stubQuota) Deduct(_ context.Context, _, _ string, tokens int) error {
-	s.deducted += tokens
+	s.deducted.Add(int64(tokens))
 	return nil
 }
 
+func (s *stubQuota) DeductedTokens() int64 {
+	return s.deducted.Load()
+}
+
 type stubChatSaver struct {
+	mu    sync.Mutex
 	saved []*domain.ChatLog
 }
 
 func (s *stubChatSaver) Save(_ context.Context, l *domain.ChatLog) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.saved = append(s.saved, l)
 	return nil
+}
+
+func (s *stubChatSaver) GetSaved() []*domain.ChatLog {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.saved
 }
 
 // stubRouter wraps a single provider for all models.
@@ -119,15 +134,16 @@ func TestHandlerChat_Complete(t *testing.T) {
 
 	// Deduct and Save are async — give the goroutine a moment
 	time.Sleep(50 * time.Millisecond)
-	if q.deducted == 0 {
+	if q.DeductedTokens() == 0 {
 		t.Error("expected quota to be deducted")
 	}
 	// Verify credential_id is bound in the saved chat log (SSO ↔ backend account link)
-	if len(saver.saved) == 0 {
+	saved := saver.GetSaved()
+	if len(saved) == 0 {
 		t.Fatal("expected chat log to be saved")
 	}
-	if saver.saved[0].CredentialID == nil || *saver.saved[0].CredentialID != 1 {
-		t.Errorf("expected CredentialID=1 in chat log, got %v", saver.saved[0].CredentialID)
+	if saved[0].CredentialID == nil || *saved[0].CredentialID != 1 {
+		t.Errorf("expected CredentialID=1 in chat log, got %v", saved[0].CredentialID)
 	}
 }
 

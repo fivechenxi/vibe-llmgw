@@ -2,10 +2,277 @@
 
 ## 前置条件
 
-- Go 1.22+（路径 `/opt/homebrew/bin/go`）
+- Go 1.24+（路径 `/opt/homebrew/bin/go`）
 - 如需代理访问，配置 `HTTP_PROXY` 环境变量
 - Provider 集成测试需要对应的 API Key 环境变量；未设置时自动 skip
 - Repository 集成测试需要设置 `TEST_DATABASE_URL`；未设置时自动 skip
+
+---
+
+## 测试覆盖率汇总
+
+| 包 | 覆盖率 | 状态 |
+|---|--------|------|
+| internal/auth | 100.0% | ✅ PASS |
+| internal/domain | 100.0% | ✅ PASS |
+| internal/proxy | 94.8% | ✅ PASS |
+| internal/middleware | 88.2% | ✅ PASS |
+| internal/db | 83.3% | ✅ PASS |
+| internal/config | 80.0% | ✅ PASS |
+| internal/model | 56.7% | ✅ PASS (handler 100%, repo 需 DB) |
+| internal/credential | 48.3% | ✅ PASS (selector 100%, repo 需 DB) |
+| internal/chat | 38.1% | ✅ PASS (handler 100%, repo 需 DB) |
+| internal/quota | 25.0% | ✅ PASS (service 100%, repo 需 DB) |
+| internal/proxy/providers | 7.0% | ✅ PASS (mock 100%, OpenAI/Anthropic 需 API) |
+
+> **说明**：Repository 层需要 PostgreSQL 数据库（设置 `TEST_DATABASE_URL`），OpenAI/Anthropic Provider 需要真实 API Key。
+
+---
+
+## 运行全部测试
+
+```bash
+cd /Users/didi/Documents/workspace/RiderProject/llmgw
+
+# 运行所有测试
+/opt/homebrew/bin/go test ./... -v
+
+# 带竞态检测
+/opt/homebrew/bin/go test -race ./...
+
+# 带覆盖率
+/opt/homebrew/bin/go test ./... -coverprofile=coverage.out
+/opt/homebrew/bin/go tool cover -html=coverage.out
+```
+
+---
+
+## Auth 单元测试（无需 API Key，无需数据库）
+
+测试文件：`internal/auth/handler_test.go`、`internal/auth/jwt_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestAuthHandler_Login_Redirects` | Login 重定向到 SSO |
+| `TestAuthHandler_Callback_ReturnsTODO` | Callback 返回 token 占位符 |
+| `TestAuthHandler_Logout_OK` | Logout 返回成功 |
+| `TestAuthHandler_SSOProvider_Interface` | SSOProvider 接口编译通过 |
+| `TestSignToken_ValidToken` | JWT 签名和验证 |
+| `TestSignToken_ClaimsMatchAllFields` | claims 字段正确嵌入 |
+| `TestSignToken_WrongSecretFails` | 错误密钥验证失败 |
+| `TestSignToken_ExpiredToken` | 过期 token 验证失败 |
+| `TestSignToken_SigningMethodIsHS256` | 签名算法为 HS256 |
+| `TestSignToken_DifferentUsersProduceDifferentTokens` | 不同用户生成不同 token |
+
+```bash
+/opt/homebrew/bin/go test ./internal/auth/ -v -timeout 30s
+```
+
+---
+
+## Middleware 单元测试（无需 API Key，无需数据库）
+
+测试文件：`internal/middleware/auth_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestJWTAuth_ValidToken_Passes` | 有效 JWT 通过认证 |
+| `TestJWTAuth_ValidToken_SetsUserIDKey` | userID 正确设置到 context |
+| `TestJWTAuth_MissingAuthorizationHeader` | 缺少 token 返回 401 |
+| `TestJWTAuth_WrongPrefix` | 错误前缀返回 401 |
+| `TestJWTAuth_InvalidTokenString` | 无效 token 返回 401 |
+| `TestJWTAuth_ExpiredToken` | 过期 token 返回 401 |
+| `TestJWTAuth_WrongSecret` | 错误密钥返回 401 |
+| `TestJWTAuth_AbortsPipeline` | 认证失败阻止下游 handler |
+| `TestJWTAuth_UserIDKey_IsConstant` | UserIDKey 常量正确 |
+
+```bash
+/opt/homebrew/bin/go test ./internal/middleware/ -v -timeout 30s
+```
+
+---
+
+## Credential 模块测试
+
+### 单元测试（无需数据库）
+
+测试文件：`internal/credential/selector_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestSelector_StickySession_SameSessionSameCred` | 同一 session 始终选同一 credential |
+| `TestSelector_StickySession_DifferentSessionsMayDiffer` | 不同 session 可能选不同 credential |
+| `TestSelector_RoundRobin_EmptySession_Cycles` | 空 session 轮询选择 |
+| `TestSelector_RoundRobin_SingleCred` | 单 credential 始终返回它 |
+| `TestSelector_RepoError_Propagates` | DB 错误透传 |
+| `TestSelector_NoCredentials_ReturnsError` | 无 credential 返回错误 |
+| `TestSelector_MultiModel_IndependentCounters` | 多模型独立计数器 |
+| `TestSelector_ConcurrentPick_AllValid` | 并发选择线程安全 |
+| `TestSelector_SessionSticky_ConcurrentSameSession` | 并发 sticky 一致性 |
+
+```bash
+/opt/homebrew/bin/go test ./internal/credential/ -v -run TestSelector -timeout 30s
+```
+
+### Repository 集成测试（需要 PostgreSQL）
+
+测试文件：`internal/credential/repository_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestRepository_ListActive_ReturnsActiveOnly` | 只返回 is_active=true 的记录 |
+| `TestRepository_ListActive_OrderedByID` | 按 id 排序 |
+| `TestRepository_ListActive_NoActiveCredentials_ReturnsError` | 无活跃记录返回错误 |
+| `TestRepository_ListActive_UnknownModel_ReturnsError` | 未知模型返回错误 |
+
+```bash
+TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
+/opt/homebrew/bin/go test ./internal/credential/ -v -run TestRepository -timeout 30s
+```
+
+---
+
+## Chat 模块测试
+
+### 单元测试（无需数据库）
+
+测试文件：`internal/chat/handler_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestChatHandler_ListSessions_OK` | 返回 session 列表 |
+| `TestChatHandler_ListSessions_PassesUserID` | userID 正确传递给 repo |
+| `TestChatHandler_ListSessions_EmptySessions` | 空 session 列表正常返回 |
+| `TestChatHandler_ListSessions_RepoError` | repo 错误返回 500 |
+| `TestChatHandler_GetSession_OK` | 返回 session 日志 |
+| `TestChatHandler_GetSession_PassesUserIDAndSessionID` | 参数正确传递 |
+| `TestChatHandler_GetSession_InvalidUUID` | 无效 UUID 返回 400 |
+| `TestChatHandler_GetSession_RepoError` | repo 错误返回 500 |
+| `TestChatHandler_GetSession_EmptyLogs` | 空 session 正常返回 |
+
+```bash
+/opt/homebrew/bin/go test ./internal/chat/ -v -run TestChatHandler -timeout 30s
+```
+
+### Repository 集成测试（需要 PostgreSQL）
+
+测试文件：`internal/chat/repository_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestChatRepository_Save_And_ListSessions` | Save 后 ListSessions 能找到 |
+| `TestChatRepository_GetSession_ReturnsLogs` | GetSession 返回正确日志 |
+| `TestChatRepository_ListSessions_Deduplicates` | DISTINCT 去重 |
+| `TestChatRepository_GetSession_EmptyForUnknownSession` | 未知 session 返回空 |
+| `TestChatRepository_ListSessions_EmptyForUnknownUser` | 未知用户返回空 |
+
+```bash
+TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
+/opt/homebrew/bin/go test ./internal/chat/ -v -run TestChatRepository -timeout 30s
+```
+
+---
+
+## Model 模块测试
+
+### 单元测试（无需数据库）
+
+测试文件：`internal/model/handler_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestModelHandler_ListModels_ReturnsModelsWithRemainingQuota` | 只返回 remaining>0 的模型 |
+| `TestModelHandler_ListModels_AllExhausted_ReturnsEmpty` | 全耗尽返回空 |
+| `TestModelHandler_ListModels_RemainingCorrect` | Remaining 计算正确 |
+| `TestModelHandler_ListModels_RepoError` | repo 错误返回 500 |
+| `TestModelHandler_ListModels_NegativeRemaining_Excluded` | 负剩余被排除 |
+| `TestModelHandler_ListQuota_ReturnsAll` | 返回所有 quota |
+| `TestModelHandler_ListQuota_IncludesExhausted` | 包含耗尽的 quota |
+| `TestModelHandler_ListQuota_RepoError` | repo 错误返回 500 |
+
+```bash
+/opt/homebrew/bin/go test ./internal/model/ -v -run TestModelHandler -timeout 30s
+```
+
+### Repository 集成测试（需要 PostgreSQL）
+
+测试文件：`internal/model/repository_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestModelRepository_ListActive_ReturnsActiveModels` | 只返回 is_active=true |
+| `TestModelRepository_ListActive_AllModelsHaveIsActiveTrue` | 所有返回的 IsActive=true |
+| `TestModelRepository_ListActive_ScansAllFields` | 所有字段正确扫描 |
+
+```bash
+TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
+/opt/homebrew/bin/go test ./internal/model/ -v -run TestModelRepository -timeout 30s
+```
+
+---
+
+## Domain 单元测试
+
+测试文件：`internal/domain/types_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestUserQuota_Remaining` | Remaining 计算正确 |
+| `TestChatLog_IDIsUUID` | ID 为 UUID 类型 |
+| `TestChatLog_CredentialID_NilByDefault` | CredentialID 默认 nil |
+| `TestChatLog_CredentialID_Settable` | CredentialID 可设置 |
+| `TestChatLog_RequestMessagesIsBytes` | RequestMessages 为 JSONB |
+| `TestChatLog_StatusValues` | Status 值正确 |
+| `TestTokenUsage_Fields` | TokenUsage 字段正确 |
+| `TestTokenUsage_TotalIsIndependent` | TotalTokens 独立存储 |
+| `TestMessage_RoleAndContent` | Message 字段正确 |
+| `TestChatRequest_StreamDefaultsFalse` | Stream 默认 false |
+| `TestChatRequest_JSONRoundTrip` | ChatRequest JSON 序列化 |
+| `TestChatResponse_JSONRoundTrip` | ChatResponse JSON 序列化 |
+| `TestModel_IsActiveField` | Model.IsActive 正确 |
+| `TestModelCredential_Fields` | ModelCredential 字段正确 |
+| `TestUser_Fields` | User 字段正确 |
+
+```bash
+/opt/homebrew/bin/go test ./internal/domain/ -v -timeout 30s
+```
+
+---
+
+## Config 单元测试
+
+测试文件：`internal/config/config_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestLoad_MinimalConfig` | 最小配置加载 |
+| `TestLoad_EnvField` | Env 字段正确 |
+| `TestLoad_SSOWechatWork` | SSO 微信配置加载 |
+| `TestLoad_ProvidersConfig` | Providers 配置加载 |
+| `TestLoad_ProxyField` | Proxy 字段加载 |
+| `TestLoad_EmptyProxy` | 空 Proxy 正确处理 |
+| `TestLoad_BaiduConfig` | 百度配置加载 |
+| `TestLoad_MultipleLoads` | 多次加载互不干扰 |
+
+```bash
+/opt/homebrew/bin/go test ./internal/config/ -v -timeout 30s
+```
+
+---
+
+## DB 单元测试
+
+测试文件：`internal/db/db_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestConnect_UnreachableHost` | 不可达主机返回错误 |
+| `TestConnect_InvalidScheme` | 无效 DSN 返回错误 |
+| `TestConnect_Success` | 连接成功（需 TEST_DATABASE_URL） |
+
+```bash
+/opt/homebrew/bin/go test ./internal/db/ -v -timeout 30s
+```
 
 ---
 
@@ -25,12 +292,41 @@
 | `TestService_Deduct_AccumulatesMultipleCalls` | 多次调用累加到 stub |
 | `TestService_Deduct_RepoError` | repo 写错误被透传 |
 | `TestService_Deduct_ZeroTokens` | 0 token 不报错 |
+| `TestService_TryDeduct_HasQuota` | TryDeduct 成功扣减 |
+| `TestService_TryDeduct_QuotaExhausted` | quota 耗尽时 TryDeduct 失败 |
+| `TestService_TryDeduct_NoRow` | 无行时 TryDeduct 返回 ErrQuotaExceeded |
+| `TestService_TryDeduct_RepoError` | repo 错误透传 |
 | `TestService_CheckThenDeduct_QuotaDecreases` | Check 通过后 Deduct，stub 正确记录用量 |
 
 ```bash
-cd /Users/didi/Documents/workspace/RiderProject/llmgw
-
 /opt/homebrew/bin/go test ./internal/quota/ -v -run "TestUserQuota|TestService" -timeout 30s
+```
+
+---
+
+## Quota 模块测试（无需数据库）
+
+测试文件：`internal/quota/module_test.go`
+
+使用 in-memory fake repo 验证完整业务流程。
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestModule_FullFlow` | 完整流程：check → deduct → exhaust |
+| `TestModule_MultiUser` | 用户间 quota 隔离 |
+| `TestModule_MultiModel` | 模型间 quota 隔离 |
+| `TestModule_NoQuotaRow` | 无 quota 行返回错误 |
+| `TestModule_DeductBeyondQuota` | Deduct 不强制上限 |
+| `TestModule_ConcurrentDeduct` | 并发 Deduct 线程安全 |
+| `TestModule_CheckDeductMultiRound` | 多轮请求正确扣减 |
+| `TestModule_DeductNoRow` | 无行 Deduct 返回错误 |
+| `TestModule_LargeQuota` | 大数值 quota 正确处理 |
+| `TestModule_UsersIsolation` | 多用户隔离表驱动测试 |
+| `TestModule_ConcurrentCheckAndDeduct` | TOCTOU 竞态演示 |
+| `TestModule_TryDeduct_ConcurrentSafe` | TryDeduct 并发安全 |
+
+```bash
+/opt/homebrew/bin/go test ./internal/quota/ -v -run TestModule -timeout 30s
 ```
 
 ---
@@ -80,8 +376,6 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test?sslmode=disabl
 | `TestRouterRegister_Override` | Register 可覆盖已有映射 |
 
 ```bash
-cd /Users/didi/Documents/workspace/RiderProject/llmgw
-
 /opt/homebrew/bin/go test ./internal/proxy/ -v -timeout 30s
 ```
 
@@ -119,8 +413,6 @@ cd /Users/didi/Documents/workspace/RiderProject/llmgw
 | `TestMockStream` | 流式分块、quota 扣减、日志保存 |
 
 ```bash
-cd /Users/didi/Documents/workspace/RiderProject/llmgw
-
 /opt/homebrew/bin/go test ./internal/proxy/providers/ -v -run TestMock -timeout 30s
 ```
 
@@ -141,8 +433,6 @@ cd /Users/didi/Documents/workspace/RiderProject/llmgw
 ### 运行全部测试
 
 ```bash
-cd /Users/didi/Documents/workspace/RiderProject/llmgw
-
 ANTHROPIC_API_KEY="..." \
 HTTP_PROXY="..." \
 /opt/homebrew/bin/go test ./internal/proxy/providers/ \
@@ -203,8 +493,55 @@ HTTP_PROXY="..." \
 
 ---
 
+## 系统测试
+
+测试文件：`test/system/system_test.go`
+
+端到端 HTTP 请求流测试，覆盖所有 API 端点。
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestSystem_Auth_Login` | Login 重定向 |
+| `TestSystem_Auth_Callback` | Callback 返回 |
+| `TestSystem_Auth_Logout` | Logout 成功 |
+| `TestSystem_Middleware_ValidToken` | 有效 token 通过 |
+| `TestSystem_Middleware_MissingToken` | 缺少 token 拒绝 |
+| `TestSystem_Middleware_InvalidToken` | 无效 token 拒绝 |
+| `TestSystem_Middleware_ExpiredToken` | 过期 token 拒绝 |
+| `TestSystem_Middleware_WrongSecret` | 错误密钥拒绝 |
+| `TestSystem_Router_KnownModels` | 已知模型路由 |
+| `TestSystem_Router_UnknownModel` | 未知模型错误 |
+| `TestSystem_Router_Register` | 自定义模型注册 |
+| `TestSystem_Router_Override` | 模型覆盖 |
+| `TestSystem_MockProvider_Complete` | Mock 同步调用 |
+| `TestSystem_MockProvider_CustomResponse` | Mock 自定义响应 |
+| `TestSystem_Quota_Remaining` | Quota 剩余计算 |
+| `TestSystem_Quota_ErrQuotaExceeded` | Quota 耗尽错误 |
+| `TestSystem_Domain_*` | Domain 类型测试 |
+| `TestSystem_Config_*` | Config 字段测试 |
+| `TestSystem_Integration_*` | 集成测试 |
+
+```bash
+/opt/homebrew/bin/go test ./test/system/... -v -timeout 60s
+```
+
+---
+
+## 测试统计
+
+| 类型 | 数量 |
+|------|------|
+| 单元测试 | 92 |
+| 模块测试 | 23 |
+| 集成测试 | 20 (需 DB/API) |
+| 系统测试 | 30 |
+| **总计** | **165** |
+
+---
+
 ## 说明
 
 - Anthropic 测试使用 `claude-haiku-4-5`，OpenAI 测试使用 `gpt-4o-mini`，均为最低价模型
 - 未设置对应 API Key 时测试自动 skip，不影响 CI
 - 代理通过 `HTTP_PROXY` 环境变量传入，不传则直连；生产环境在 `config.yaml` 的 `proxy` 字段配置
+- Repository 层测试需要 PostgreSQL 数据库，通过 `TEST_DATABASE_URL` 传入

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 // ---- in-memory test doubles ----
 
 type inMemoryQuota struct {
+	mu       sync.Mutex
 	balances map[string]int
 	deducted map[string]int
 }
@@ -36,6 +38,8 @@ func newInMemoryQuota(initial map[string]int) *inMemoryQuota {
 }
 
 func (q *inMemoryQuota) Check(_ context.Context, userID, modelID string) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	if q.balances[userID+":"+modelID] <= 0 {
 		return quota.ErrQuotaExceeded
 	}
@@ -43,19 +47,36 @@ func (q *inMemoryQuota) Check(_ context.Context, userID, modelID string) error {
 }
 
 func (q *inMemoryQuota) Deduct(_ context.Context, userID, modelID string, tokens int) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	key := userID + ":" + modelID
 	q.balances[key] -= tokens
 	q.deducted[key] += tokens
 	return nil
 }
 
+func (q *inMemoryQuota) DeductedTokens(userID, modelID string) int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.deducted[userID+":"+modelID]
+}
+
 type inMemorySaver struct {
+	mu   sync.Mutex
 	logs []*domain.ChatLog
 }
 
 func (s *inMemorySaver) Save(_ context.Context, l *domain.ChatLog) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.logs = append(s.logs, l)
 	return nil
+}
+
+func (s *inMemorySaver) GetLogs() []*domain.ChatLog {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.logs
 }
 
 // fixedCredSel always returns a dummy credential; satisfies CredentialSelector.
@@ -120,18 +141,19 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 	}
 
 	time.Sleep(50 * time.Millisecond) // deduct and save run in goroutine
-	if q.deducted["alice:mock"] == 0 {
+	if q.DeductedTokens("alice", "mock") == 0 {
 		t.Error("expected quota to be deducted")
 	}
 	// Verify SSO user ↔ backend credential binding recorded in chat log
-	if len(saver.logs) == 0 {
+	logs := saver.GetLogs()
+	if len(logs) == 0 {
 		t.Fatal("expected chat log to be saved")
 	}
-	if saver.logs[0].CredentialID == nil {
+	if logs[0].CredentialID == nil {
 		t.Error("expected CredentialID to be set in chat log")
 	}
-	if saver.logs[0].UserID != "alice" {
-		t.Errorf("expected UserID=alice, got %q", saver.logs[0].UserID)
+	if logs[0].UserID != "alice" {
+		t.Errorf("expected UserID=alice, got %q", logs[0].UserID)
 	}
 }
 
