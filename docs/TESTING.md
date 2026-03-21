@@ -8,6 +8,55 @@
 
 ---
 
+## Proxy 单元测试（无需 API Key，无需数据库）
+
+测试文件：`internal/proxy/handler_test.go`、`internal/proxy/router_test.go`
+
+所有依赖均通过 stub/interface 注入，无外部调用。
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestHandlerChat_Complete` | 完整非流式路径：200、正确内容、quota 扣减、CredentialID 写入 ChatLog |
+| `TestHandlerChat_CredentialUnavailable` | credential 池为空 → 503 |
+| `TestHandlerChat_BadRequest_MissingModel` | model 缺失 → 400 |
+| `TestHandlerChat_QuotaExceeded` | quota 耗尽 → 403 |
+| `TestHandlerChat_QuotaServiceError` | quota 服务异常 → 500 |
+| `TestHandlerChat_UnsupportedModel` | 未注册模型 → 400 |
+| `TestHandlerChat_Stream` | 流式路径：SSE Content-Type、body 含内容 |
+| `TestRouterGet_KnownModels` | 所有内置模型均可解析到 Provider |
+| `TestRouterGet_UnknownModel` | 未知模型返回 error |
+| `TestRouterRegister` | Register 后可通过 Get 取到 |
+| `TestRouterRegister_Override` | Register 可覆盖已有映射 |
+
+```bash
+cd /Users/didi/Documents/workspace/RiderProject/llmgw
+
+/opt/homebrew/bin/go test ./internal/proxy/ -v -timeout 30s
+```
+
+---
+
+## Proxy 集成测试（无需 API Key，无需数据库）
+
+测试文件：`internal/proxy/proxy_integration_test.go`
+
+使用真实 Handler + 真实 Router + MockProvider 端到端验证完整请求路径，quota 和 ChatLog 用内存实现替代数据库。
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestIntegration_CompleteFlow` | 全路径 200、内容正确、quota 扣减、credential_id 绑定写入 |
+| `TestIntegration_StreamFlow` | SSE 流式路径端到端 |
+| `TestIntegration_QuotaEnforced` | quota=0 时在 provider 调用前返回 403 |
+| `TestIntegration_UnknownModelRejected` | 未注册模型 → 400 |
+| `TestIntegration_MultiTurn` | 多轮消息正确转发，mock echo 最后一条 |
+| `TestIntegration_RouterRegisterCustomProvider` | Router.Register 注入的 provider 可通过完整 Handler 路径访问 |
+
+```bash
+/opt/homebrew/bin/go test ./internal/proxy/ -v -run TestIntegration -timeout 30s
+```
+
+---
+
 ## Mock Provider 测试（无需 API Key，本地可直接运行）
 
 测试文件：`internal/proxy/providers/mock_test.go`

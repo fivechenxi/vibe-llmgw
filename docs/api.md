@@ -132,8 +132,8 @@ POST /api/chat
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | model | string | 是 | 模型 ID，须在可用模型列表中 |
-| messages | array | 是 | 完整的对话上下文，role 为 `user` 或 `assistant` |
-| session_id | string(uuid) | 否 | 会话 ID，用于关联历史记录；不传则本次不归档 |
+| messages | array | 是 | 完整的对话上下文，role 为 `user`、`assistant` 或 `system` |
+| session_id | string(uuid) | 否 | 会话 ID，用于关联历史记录；同一 session_id 的所有请求将路由到同一后端账号（Session-Sticky），不传则按 Round Robin 分配 |
 | stream | bool | 否 | 默认 false；true 时以 SSE 流式返回 |
 
 **Response `200` (stream=false)**
@@ -166,6 +166,7 @@ data: [DONE]
 | `401` | JWT 缺失或已过期 |
 | `403` | 该模型 quota 已耗尽 |
 | `502` | 调用上游 Provider API 失败 |
+| `503` | 该模型暂无可用后端账号（model_credentials 中无 active 记录） |
 
 ---
 

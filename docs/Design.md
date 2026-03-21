@@ -95,36 +95,46 @@ user_quota:
 
 ### 3.3 后端账号池与 Key 选取
 
-每个模型对应一个后端 API 账号池（多个 Key），请求到达时用 **Round Robin** 从池中选出一个账号，实现负载分散和单账号限速规避。
+每个模型对应一个后端 API 账号池（多个 Key），请求到达时从池中选出一个账号，实现负载分散和单账号限速规避。API Key **不存储在配置文件**，统一入库管理，应用进程不感知具体值。
 
 **账号池数据结构：**
 ```
 model_credentials:
   id: int                  // 自增主键
   model_id: string         // 关联 models.id
-  api_key: string          // 加密存储
+  api_key: string          // 建议加密存储
   label: string            // 备注，如 "account-1"
   is_active: bool          // 是否启用
   created_at: timestamp
 ```
 
-**Round Robin 选取流程：**
+**选取策略：Session-Sticky + Round Robin**
+
+同一会话的多轮对话必须使用同一个后端账号，否则部分 Provider 的上下文或限速状态会被打乱。选取规则如下：
+
 ```
 收到请求，目标 model_id = "gpt-4o"
   → 从 model_credentials 查出该 model 的所有 active key
-  → 用原子计数器 counter[model_id] % len(keys) 选出当前 key
-  → counter[model_id]++
-  → 用选出的 key 发起 Provider API 调用
-  → 将 credential_id 写入本次 chat_log（建立前端用户与后端账号的绑定记录）
+
+  如果请求携带 session_id（非空）：
+    → idx = fnv64a(session_id) % len(keys)   // 哈希确定性映射，无需存储状态
+    → 同一 session_id 永远映射到同一账号
+
+  如果 session_id 为空（一次性请求）：
+    → idx = counter[model_id]++ % len(keys)  // 原子计数器，全局 Round Robin 分散负载
+
+  → 用 keys[idx].api_key 发起 Provider API 调用
+  → 将 credential_id 写入本次 chat_log
 ```
 
-> 计数器存在内存中（进程级），重启后从 0 开始，满足初版需求。后续可迁移至原子 DB 序列或 Redis 以支持多实例。
+> 计数器存在内存中（进程级），重启后从 0 开始，满足初版需求。后续可迁移至 Redis 以支持多实例。
+> Hash 方案的前提是 credential 池不频繁变动；若需动态上下线账号，可在 session 首次请求时将映射写入缓存。
 
 **SSO 用户与后端账号绑定：**
 
 每条 `chat_log` 同时记录 `user_id`（SSO 身份）和 `credential_id`（实际使用的后端 Key），形成完整的审计链路：
 ```
-前端 SSO 用户 alice  ──请求──▶  credential_id=3 (gpt-4o / account-2)
+前端 SSO 用户 alice  ──Session-123 的所有请求──▶  credential_id=3 (gpt-4o / account-2)
 ```
 管理员可按 `credential_id` 聚合查询某个后端账号的实际用量，也可按 `user_id` 追溯某用户使用了哪些后端账号。
 
@@ -149,7 +159,9 @@ model_credentials:
 用户请求 (统一格式)
   → 验证 JWT（提取 SSO user_id）
   → 检查 Quota
-  → Round Robin 从账号池选出 credential（记录 credential_id）
+  → Session-Sticky 从账号池选出 credential
+      有 session_id → hash(session_id) % len(creds)  // 同会话固定账号
+      无 session_id → RR counter++ % len(creds)      // 无状态请求均衡分散
   → 转换为目标 Provider 格式
   → 用 credential.api_key 调用 Provider API
   → 转换响应为统一格式

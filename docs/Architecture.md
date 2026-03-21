@@ -17,13 +17,20 @@ llmgw/
 │   ├── quota/
 │   │   ├── repository.go            # Get(userID, modelID) / Deduct(tokens) / ListByUser
 │   │   └── service.go               # Check：余量 ≤ 0 返回 ErrQuotaExceeded；Deduct：扣减已用 token
+│   ├── credential/
+│   │   ├── repository.go            # ListActive(modelID)：查询 model_credentials 表的所有 active key
+│   │   └── selector.go              # Selector 接口 + RoundRobinSelector 实现：
+│   │                                #   有 session_id → fnv64a(session_id) % len(creds)（同会话固定账号）
+│   │                                #   无 session_id → per-model atomic counter（Round Robin）
 │   ├── proxy/
 │   │   ├── handler.go               # POST /api/chat 主流程（见下方流程描述）
 │   │   ├── router.go                # 维护 modelID → Provider 的映射表，NewRouter 时按配置初始化
 │   │   └── providers/
-│   │       ├── provider.go          # Provider 接口：Complete（同步）/ Stream（SSE）；QuotaDeductor / ChatLogger 窄接口
+│   │       ├── provider.go          # Provider 接口：Complete/Stream 均接受 *domain.ModelCredential，
+│   │       │                        # API Key 不在 provider 内存储，每次请求从 credential 参数取
 │   │       ├── openai.go            # 兼容 OpenAI Chat Completions 格式，复用于 DeepSeek / Alibaba Qwen
-│   │       └── anthropic.go         # 将 OpenAI messages 格式转换为 Anthropic Messages API 格式
+│   │       ├── anthropic.go         # 将 OpenAI messages 格式转换为 Anthropic Messages API 格式
+│   │       └── mock.go              # 本地开发用 echo provider，无需网络
 │   ├── chat/
 │   │   ├── repository.go            # Save(ChatLog) / ListSessions(userID) / GetSession(userID, sessionID)
 │   │   └── handler.go               # GET /api/sessions；GET /api/sessions/:session_id
@@ -34,7 +41,8 @@ llmgw/
 │   ├── 001_create_users.sql
 │   ├── 002_create_models.sql        # 同时预置 8 个初始模型记录
 │   ├── 003_create_user_quotas.sql
-│   └── 004_create_chat_logs.sql
+│   ├── 004_create_chat_logs.sql
+│   └── 005_create_model_credentials.sql  # 后端账号池表 + chat_logs.credential_id 列
 ├── web/
 │   └── src/
 │       ├── api/client.ts            # 封装所有后端 HTTP 调用，统一携带 Authorization header
@@ -85,21 +93,26 @@ llmgw/
      按 modelID 返回对应 Provider 实例
      未知 model → 返回 400
 
-5a. 非流式（stream=false）
-     provider.Complete(ctx, userID, req)
+5. credential.Selector.Pick(modelID, sessionID)
+     session_id 非空 → idx = fnv64a(session_id) % len(creds)  // session-sticky
+     session_id 为空 → idx = counter[modelID]++ % len(creds)  // round-robin
+     无可用 credential → 返回 503
+
+6a. 非流式（stream=false）
+     provider.Complete(ctx, userID, req, cred)
        → 构造 Provider 格式请求体
-       → HTTP POST 到 Provider API（携带后端 API Key）
+       → HTTP POST 到 Provider API（使用 cred.APIKey）
        → 解析响应，转为统一 ChatResponse
      goroutine: quota.Deduct(userID, modelID, totalTokens)
-     goroutine: chatRepo.Save(ChatLog{ status=success, ... })
+     goroutine: chatRepo.Save(ChatLog{ userID, credentialID, status=success, ... })
      → 返回 JSON { content, usage }
 
-5b. 流式（stream=true）
-     provider.Stream(c, userID, req, quotaSvc, chatRepo)
+6b. 流式（stream=true）
+     provider.Stream(c, userID, req, cred, quotaSvc, chatRepo)
        → 设置响应头 Content-Type: text/event-stream
        → 转发 Provider SSE 流到客户端（逐 chunk 写入）
        → 流结束后统计 token
-       → quota.Deduct + chatRepo.Save
+       → goroutine: quota.Deduct + chatRepo.Save（含 credentialID）
 ```
 
 ### Quota 扣减时序
@@ -128,6 +141,7 @@ psql -U postgres -d llmgw -f db/migrations/001_create_users.sql
 psql -U postgres -d llmgw -f db/migrations/002_create_models.sql
 psql -U postgres -d llmgw -f db/migrations/003_create_user_quotas.sql
 psql -U postgres -d llmgw -f db/migrations/004_create_chat_logs.sql
+psql -U postgres -d llmgw -f db/migrations/005_create_model_credentials.sql
 ```
 
 ### 2. 配置后端
@@ -138,7 +152,9 @@ cp config.yaml.example config.yaml
 #   database.dsn
 #   jwt.secret
 #   sso.provider 及对应参数
-#   providers.openai.api_key / providers.anthropic.api_key / 等
+#   proxy（可选，出口代理地址）
+# 注意：Provider API Key 不在 config.yaml 中配置，
+#       通过 SQL 写入 model_credentials 表（见步骤 6）
 ```
 
 ### 3. 启动后端
@@ -166,14 +182,29 @@ INSERT INTO user_quotas (user_id, model_id, quota_tokens, reset_period, reset_da
 VALUES ('user_001', 'gpt-4o', 1000000, 'monthly', '2026-04-01');
 ```
 
+### 6. 录入后端 API Key 账号池（手动 SQL，初版无管理界面）
+
+```sql
+-- 为 gpt-4o 添加两个后端账号（每个账号对应一个 OpenAI API Key）
+INSERT INTO model_credentials (model_id, api_key, label)
+VALUES
+  ('gpt-4o', 'sk-...account1...', 'account-1'),
+  ('gpt-4o', 'sk-...account2...', 'account-2');
+
+-- 为 claude-haiku-4-5 添加账号
+INSERT INTO model_credentials (model_id, api_key, label)
+VALUES ('claude-haiku-4-5', 'sk-ant-...', 'account-1');
+```
+
+同一 `model_id` 可配置多个 Key，系统自动 Session-Sticky 选取，无需手动指定。
+
 ---
 
 ## 待实现项（TODO）
 
 | 模块 | 文件 | 内容 |
 |------|------|------|
-| SSO | `internal/auth/sso.go` | 实现 WechatWorkProvider / LDAPProvider |
-| Proxy | `internal/proxy/providers/openai.go` | Complete 和 Stream 的 HTTP 调用逻辑 |
-| Proxy | `internal/proxy/providers/anthropic.go` | messages 格式转换 + API 调用 |
+| SSO | `internal/auth/sso.go` | 实现 WechatWorkProvider / LDAPProvider / SAMLProvider |
 | 前端 | `web/src/pages/Chat.tsx` | 安装 uuid 依赖（`npm i uuid @types/uuid`） |
 | 前端 | `web/` | 配置 vite.config.ts 的 `/api` 代理 |
+| 管理 | — | 后端账号池 / Quota 的 Web 管理界面（当前需手动 SQL） |
