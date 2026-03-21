@@ -23,6 +23,29 @@
 
 ## 快速开始
 
+### 方式一：Docker Compose（推荐用于测试验证）
+
+最快上手方式，无需手动配置数据库。
+
+```bash
+# 启动测试环境（PostgreSQL + LLM Gateway）
+./test/docker/setup-test-env.sh up
+
+# 运行 API 演示脚本（使用 mock 模型）
+./test/scripts/demo-chat.sh
+
+# 停止环境
+./test/docker/setup-test-env.sh down
+```
+
+启动后服务：
+- **PostgreSQL** 端口 5433
+- **LLM Gateway** 端口 8080
+
+测试用户：`alice`（有 quota）、`bob`（已耗尽）、`charlie`（无 quota）
+
+### 方式二：手动搭建
+
 **前置条件：** Go 1.22+、Node.js 18+、PostgreSQL 14+
 
 ```bash
@@ -51,3 +74,4 @@ cd web && npm install && npm run dev   # 访问 http://localhost:5173
 - [docs/api.md](./docs/api.md) — REST API 完整定义
 - [docs/Design.md](./docs/Design.md) — 需求与系统设计
 - [docs/TESTING.md](./docs/TESTING.md) — 测试方法与运行命令
+- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) — Docker 部署指南
