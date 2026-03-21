@@ -19,11 +19,17 @@ type Selector interface {
 	Pick(ctx context.Context, modelID, sessionID string) (*domain.ModelCredential, error)
 }
 
+// credentialsLister is the narrow DB interface RoundRobinSelector needs.
+// *Repository satisfies it; tests can substitute a fake.
+type credentialsLister interface {
+	ListActive(ctx context.Context, modelID string) ([]domain.ModelCredential, error)
+}
+
 // RoundRobinSelector implements Selector.
 // - Non-empty sessionID: hash(sessionID) % len(creds) — deterministic, no state needed.
 // - Empty sessionID: per-model atomic counter (classic RR).
 type RoundRobinSelector struct {
-	repo     *Repository
+	repo     credentialsLister
 	counters sync.Map // model_id -> *atomic.Uint64
 }
 
