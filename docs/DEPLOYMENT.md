@@ -270,6 +270,98 @@ ENV GOPROXY=https://goproxy.cn,direct
 
 ---
 
+## API 演示
+
+启动测试环境后，可以使用演示脚本快速体验 API 功能。
+
+### 使用演示脚本
+
+```bash
+# 完整 API 流程演示（彩色输出）
+./test/scripts/demo-chat.sh
+
+# 指定用户
+./test/scripts/demo-chat.sh alice
+
+# 指定用户和消息
+./test/scripts/demo-chat.sh alice "你好，介绍一下你自己"
+
+# 指定用户、消息和会话ID
+./test/scripts/demo-chat.sh alice "继续" "550e8400-e29b-41d4-a716-446655440000"
+```
+
+演示脚本执行以下操作：
+
+| 步骤 | API | 说明 |
+|------|-----|------|
+| 1 | - | 生成 JWT Token |
+| 2 | GET /api/models | 获取可用模型列表 |
+| 3 | GET /api/quota | 获取用户 Quota |
+| 4 | POST /api/chat | 发送聊天消息（非流式） |
+| 5 | POST /api/chat | 发送聊天消息（流式 SSE） |
+| 6 | GET /api/sessions | 获取会话列表 |
+| 7 | GET /api/sessions/{id} | 获取会话详情 |
+
+### 使用 curl 命令
+
+```bash
+# 运行 curl 命令集合
+./test/scripts/curl-commands.sh
+```
+
+### 手动 curl 示例
+
+```bash
+# 设置变量
+API_BASE="http://localhost:8080"
+TOKEN="your-jwt-token-here"
+
+# 1. 获取可用模型
+curl -H "Authorization: Bearer $TOKEN" "${API_BASE}/api/models"
+
+# 2. 发送聊天消息
+curl -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"mock","messages":[{"role":"user","content":"你好"}]}' \
+  "${API_BASE}/api/chat"
+
+# 3. 流式聊天
+curl -N -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"mock","messages":[{"role":"user","content":"讲个笑话"}],"stream":true}' \
+  "${API_BASE}/api/chat"
+```
+
+### 测试用户
+
+| 用户 ID | Email | Quota 状态 |
+|---------|-------|-----------|
+| alice | alice@test.com | mock: 100万, gpt-4o: 49万 |
+| bob | bob@test.com | mock: 已耗尽 |
+| charlie | charlie@test.com | 无 quota |
+
+### 生成 JWT Token
+
+```bash
+# 使用工具脚本生成
+go run test/tools/sign-token.go alice
+
+# 或使用 openssl 手动生成
+header='{"alg":"HS256","typ":"JWT"}'
+payload='{"sub":"alice","email":"alice@test.com","name":"Alice","exp":'$(($(date +%s)+3600))'}'
+secret="test-jwt-secret-for-blackbox-testing"
+
+h=$(echo -n "$header" | base64 | tr -d '=' | tr '/+' '_-')
+p=$(echo -n "$payload" | base64 | tr -d '=' | tr '/+' '_-')
+s=$(echo -n "${h}.${p}" | openssl dgst -sha256 -hmac "$secret" -binary | base64 | tr -d '=' | tr '/+' '_-')
+
+echo "${h}.${p}.${s}"
+```
+
+---
+
 ## 生产部署建议
 
 1. **使用 secrets 管理敏感信息**
