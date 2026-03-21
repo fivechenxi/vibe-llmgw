@@ -4,7 +4,58 @@
 
 - Go 1.22+（路径 `/opt/homebrew/bin/go`）
 - 如需代理访问，配置 `HTTP_PROXY` 环境变量
-- 集成测试需要对应的 API Key 环境变量；未设置时自动 skip
+- Provider 集成测试需要对应的 API Key 环境变量；未设置时自动 skip
+- Repository 集成测试需要设置 `TEST_DATABASE_URL`；未设置时自动 skip
+
+---
+
+## Quota 单元测试（无需 API Key，无需数据库）
+
+测试文件：`internal/quota/service_test.go`
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestUserQuota_Remaining` | `Remaining()` 计算正确（含边界：0、负值） |
+| `TestService_Check_HasQuota` | 有余量时 Check 返回 nil |
+| `TestService_Check_ExactlyZeroRemaining` | 余量恰好为 0 → ErrQuotaExceeded |
+| `TestService_Check_NegativeRemaining` | used > quota → ErrQuotaExceeded |
+| `TestService_Check_RepoError` | repo DB 错误被原样透传 |
+| `TestService_Check_NotFoundIsRepoError` | 无 quota 行 → 返回错误，且不是 ErrQuotaExceeded |
+| `TestService_Deduct_DelegatesToRepo` | Deduct 将 tokens 传给 repo |
+| `TestService_Deduct_AccumulatesMultipleCalls` | 多次调用累加到 stub |
+| `TestService_Deduct_RepoError` | repo 写错误被透传 |
+| `TestService_Deduct_ZeroTokens` | 0 token 不报错 |
+| `TestService_CheckThenDeduct_QuotaDecreases` | Check 通过后 Deduct，stub 正确记录用量 |
+
+```bash
+cd /Users/didi/Documents/workspace/RiderProject/llmgw
+
+/opt/homebrew/bin/go test ./internal/quota/ -v -run "TestUserQuota|TestService" -timeout 30s
+```
+
+---
+
+## Quota Repository 集成测试（需要 PostgreSQL）
+
+测试文件：`internal/quota/repository_test.go`
+
+需要一个已应用全部迁移的测试数据库，通过 `TEST_DATABASE_URL` 传入。
+
+| 测试名 | 验证内容 |
+|--------|---------|
+| `TestRepository_Get_Exists` | 插入行后 Get 返回正确字段和 Remaining |
+| `TestRepository_Get_NotFound` | 不存在的行返回 error |
+| `TestRepository_Deduct_UpdatesUsedTokens` | Deduct 后 Get 确认 used_tokens 更新 |
+| `TestRepository_Deduct_Accumulates` | 多次 Deduct 累加正确 |
+| `TestRepository_ListByUser_ReturnsAll` | 多个模型的 quota 全部返回 |
+| `TestRepository_ListByUser_NoRows` | 无记录时返回空 slice，不报错 |
+
+```bash
+TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test?sslmode=disable" \
+/opt/homebrew/bin/go test ./internal/quota/ -v -run TestRepository -timeout 30s
+```
+
+> 每个测试使用时间戳生成唯一 `user_id`，测试结束后自动清理插入的数据。
 
 ---
 

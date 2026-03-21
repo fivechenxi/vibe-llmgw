@@ -3,12 +3,21 @@ package quota
 import (
 	"context"
 	"errors"
+
+	"github.com/yourorg/llmgw/internal/domain"
 )
 
 var ErrQuotaExceeded = errors.New("quota exceeded")
 
+// quotaRepo is the narrow interface Service needs from the persistence layer.
+// *Repository satisfies it; tests can substitute a stub.
+type quotaRepo interface {
+	Get(ctx context.Context, userID, modelID string) (*domain.UserQuota, error)
+	Deduct(ctx context.Context, userID, modelID string, tokens int) error
+}
+
 type Service struct {
-	repo *Repository
+	repo quotaRepo
 }
 
 func NewService(repo *Repository) *Service {
