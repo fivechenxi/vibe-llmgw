@@ -1,16 +1,24 @@
 package model
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/yourorg/llmgw/internal/domain"
 	"github.com/yourorg/llmgw/internal/middleware"
 	"github.com/yourorg/llmgw/internal/quota"
 )
 
+// quotaLister is the narrow interface Handler needs from the quota repository.
+// *quota.Repository satisfies it; tests can substitute a stub.
+type quotaLister interface {
+	ListByUser(ctx context.Context, userID string) ([]domain.UserQuota, error)
+}
+
 type Handler struct {
 	repo      *Repository
-	quotaRepo *quota.Repository
+	quotaRepo quotaLister
 }
 
 func NewHandler(repo *Repository, quotaRepo *quota.Repository) *Handler {
