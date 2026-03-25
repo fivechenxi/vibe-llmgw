@@ -1,11 +1,16 @@
 import { useState } from "react";
 
 export function LoginPage() {
+  const devLoginEnabled = import.meta.env.VITE_ENABLE_DEV_LOGIN === "true";
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function login() {
+    if (!devLoginEnabled) {
+      window.location.href = "/auth/login";
+      return;
+    }
     if (!username.trim()) return;
     setError("");
     setLoading(true);
@@ -42,21 +47,23 @@ export function LoginPage() {
       <div className="bg-white rounded-xl shadow p-8 flex flex-col items-center gap-4 w-80">
         <h1 className="text-xl font-semibold">LLM Gateway</h1>
         <p className="text-sm text-gray-500 text-center">企业内部 AI 聊天平台</p>
-        <input
-          className="w-full border rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300"
-          placeholder="用户名（如 alice）"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && login()}
-          autoFocus
-        />
-        {error && <p className="text-red-500 text-xs self-start">{error}</p>}
+        {devLoginEnabled && (
+          <input
+            className="w-full border rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300"
+            placeholder="用户名（如 alice）"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && login()}
+            autoFocus
+          />
+        )}
+        {devLoginEnabled && error && <p className="text-red-500 text-xs self-start">{error}</p>}
         <button
           onClick={login}
-          disabled={loading || !username.trim()}
+          disabled={devLoginEnabled ? (loading || !username.trim()) : false}
           className="w-full bg-blue-500 text-white py-2 rounded-lg text-sm hover:bg-blue-600 disabled:opacity-50"
         >
-          {loading ? "登录中…" : "登录"}
+          {devLoginEnabled ? (loading ? "登录中…" : "开发环境登录") : "企业账号登录"}
         </button>
       </div>
     </div>

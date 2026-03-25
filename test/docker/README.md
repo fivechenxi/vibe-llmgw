@@ -33,6 +33,8 @@ test/docker/
 ./test/docker/setup-test-env.sh test
 ```
 
+该脚本会使用当前环境的 `go` 命令运行测试（不再依赖固定路径）。
+
 ### 3. 查看日志
 
 ```bash

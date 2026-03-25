@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,10 @@ func init() {
 
 func newTestHandler() *Handler {
 	return NewHandler(&config.Config{}, nil) // db not used by current stubs
+}
+
+func newTestHandlerWithCfg(cfg *config.Config) *Handler {
+	return NewHandler(cfg, nil)
 }
 
 func TestAuthHandler_Login_Redirects(t *testing.T) {
@@ -72,6 +77,22 @@ func TestAuthHandler_Logout_OK(t *testing.T) {
 	}
 	if body["message"] != "logged out" {
 		t.Errorf("Logout message = %q, want 'logged out'", body["message"])
+	}
+}
+
+func TestAuthHandler_DevLogin_Production_ReturnsNotFound(t *testing.T) {
+	h := newTestHandlerWithCfg(&config.Config{
+		Env: "production",
+	})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/auth/dev-login", bytes.NewBufferString(`{"username":"alice"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	h.DevLogin(c)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusNotFound)
 	}
 }
 

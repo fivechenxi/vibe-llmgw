@@ -6,6 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.test.yml"
+GO_CMD="${GO_CMD:-go}"
 
 case "${1:-up}" in
   up)
@@ -45,11 +46,16 @@ case "${1:-up}" in
 
   test)
     echo "🧪 Running black-box tests against test environment..."
+    if ! command -v "$GO_CMD" >/dev/null 2>&1; then
+      echo "❌ Go command not found: $GO_CMD"
+      echo "   Set GO_CMD to your Go binary path, e.g. GO_CMD=/usr/local/bin/go"
+      exit 1
+    fi
     export TEST_API_BASE="http://localhost:8080"
     export TEST_DATABASE_URL="postgres://llmgw:llmgw_test_password@localhost:5433/llmgw_test?sslmode=disable"
     export TEST_JWT_SECRET="test-jwt-secret-for-blackbox-testing"
     cd "${SCRIPT_DIR}/../.."
-    /opt/homebrew/bin/go test ./test/blackbox/... -v -timeout 60s
+    "$GO_CMD" test ./test/blackbox/... -v -timeout 60s
     ;;
 
   logs)

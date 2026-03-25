@@ -61,7 +61,9 @@ func (h *Handler) GetSession(c *gin.Context) {
 	last := logs[len(logs)-1]
 	var msgs []domain.Message
 	if err := json.Unmarshal(last.RequestMessages, &msgs); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse session messages"})
+		// Do not fail the whole session page on malformed historical payloads.
+		// Return an empty timeline so frontend can still recover.
+		c.JSON(http.StatusOK, gin.H{"messages": []domain.Message{}, "model": last.ModelID})
 		return
 	}
 	msgs = append(msgs, domain.Message{Role: "assistant", Content: last.ResponseContent})
