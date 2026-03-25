@@ -22,15 +22,16 @@ sso:
 
 providers:
   openai:
-    api_key: ""
-    base_url: "https://api.openai.com/v1"
+    api_key: ""                                    # sk-...  or compatible key
+    base_url: "https://api.openai.com/v1"          # or a compatible proxy base URL
   anthropic:
-    api_key: ""
+    api_key: ""                                    # sk-ant-...  or compatible key
+    base_url: ""                                   # leave empty to use https://api.anthropic.com
   deepseek:
     api_key: ""
     base_url: "https://api.deepseek.com/v1"
   alibaba:
-    api_key: ""
+    api_key: ""                                    # sk-...
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   baidu:
     api_key: ""

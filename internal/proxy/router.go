@@ -25,12 +25,12 @@ func NewRouter(cfg *config.Config) *Router {
 	}
 
 	openai := providers.NewOpenAIProvider(cfg.Providers.OpenAI.BaseURL, cfg.Proxy)
-	for _, m := range []string{"gpt-4o", "gpt-4o-mini"} {
+	for _, m := range []string{"gpt-4o", "gpt-4o-mini", "gpt-5"} {
 		r.routes[m] = openai
 	}
 
-	anthropic := providers.NewAnthropicProvider(cfg.Proxy)
-	for _, m := range []string{"claude-3-5-sonnet", "claude-3-haiku", "claude-haiku-4-5"} {
+	anthropic := providers.NewAnthropicProvider(cfg.Providers.Anthropic.BaseURL, cfg.Proxy)
+	for _, m := range []string{"claude-3-5-sonnet", "claude-3-haiku", "claude-haiku-4-5", "claude-3-5-haiku-20241022"} {
 		r.routes[m] = anthropic
 	}
 
@@ -40,7 +40,7 @@ func NewRouter(cfg *config.Config) *Router {
 	}
 
 	alibaba := providers.NewOpenAIProvider(cfg.Providers.Alibaba.BaseURL, cfg.Proxy)
-	for _, m := range []string{"qwen-max", "qwen-plus"} {
+	for _, m := range []string{"qwen-max", "qwen-plus", "qwen3-max-2026-01-23", "qwen3.5-plus"} {
 		r.routes[m] = alibaba
 	}
 

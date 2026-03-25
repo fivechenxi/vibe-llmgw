@@ -21,7 +21,7 @@ func newAnthropicForTest(t *testing.T) (*AnthropicProvider, *domain.ModelCredent
 	if !strings.HasPrefix(apiKey, "sk-ant-") {
 		t.Skip("ANTHROPIC_API_KEY does not look like a valid Anthropic key, skipping integration test")
 	}
-	p := NewAnthropicProvider(os.Getenv("HTTP_PROXY"))
+	p := NewAnthropicProvider("", os.Getenv("HTTP_PROXY"))
 	cred := &domain.ModelCredential{ID: 1, APIKey: apiKey}
 	return p, cred
 }
