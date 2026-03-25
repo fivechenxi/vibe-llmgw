@@ -46,6 +46,7 @@ func main() {
 	r.GET("/auth/login", authHandler.Login)
 	r.GET("/auth/callback", authHandler.Callback)
 	r.POST("/auth/logout", authHandler.Logout)
+	r.POST("/auth/dev-login", authHandler.DevLogin)
 
 	// Authenticated routes
 	api := r.Group("/api", middleware.JWTAuth(cfg.JWT.Secret))
