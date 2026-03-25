@@ -17,24 +17,34 @@ import (
 	"github.com/yourorg/llmgw/internal/domain"
 )
 
-const anthropicBaseURL = "https://api.anthropic.com/v1/messages"
+const anthropicDefaultBaseURL = "https://api.anthropic.com"
+const anthropicMessagesPath = "/v1/messages"
 const anthropicVersion = "2023-06-01"
 
 // AnthropicProvider handles the Anthropic Messages API.
 // The API key is NOT stored here; it is supplied per-request via ModelCredential.
 type AnthropicProvider struct {
+	baseURL    string
 	httpClient *http.Client
 }
 
-// NewAnthropicProvider creates a provider; proxyURL may be empty to use direct connection.
-func NewAnthropicProvider(proxyURL string) *AnthropicProvider {
+// NewAnthropicProvider creates a provider.
+// baseURL is the scheme+host of the Anthropic endpoint (e.g. "https://api.anthropic.com").
+// The provider appends "/v1/messages" automatically, matching the OpenAI provider convention.
+// Leave empty to use the default Anthropic endpoint.
+// proxyURL sets the outbound HTTP proxy; leave empty for direct connection.
+func NewAnthropicProvider(baseURL, proxyURL string) *AnthropicProvider {
 	transport := &http.Transport{}
 	if proxyURL != "" {
 		if parsed, err := url.Parse(proxyURL); err == nil {
 			transport.Proxy = http.ProxyURL(parsed)
 		}
 	}
+	if baseURL == "" {
+		baseURL = anthropicDefaultBaseURL
+	}
 	return &AnthropicProvider{
+		baseURL:    strings.TrimRight(baseURL, "/"),
 		httpClient: &http.Client{Transport: transport, Timeout: 120 * time.Second},
 	}
 }
@@ -101,7 +111,7 @@ func toAnthropicMessages(msgs []domain.Message) (system string, out []anthropicM
 }
 
 func (p *AnthropicProvider) doRequest(ctx context.Context, apiKey string, body []byte) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicBaseURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+anthropicMessagesPath, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
