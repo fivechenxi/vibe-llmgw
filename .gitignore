@@ -1,0 +1,17 @@
+# Local config (copy from config.yaml.example, never commit real keys)
+config.yaml
+config.yaml.bak
+*.bak
+
+# Build output
+/llmgw
+/llmgw-*
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# Go
+*.test
+*.out
+coverage.html
