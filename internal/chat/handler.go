@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -48,5 +49,22 @@ func (h *Handler) GetSession(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"messages": logs})
+
+	if len(logs) == 0 {
+		c.JSON(http.StatusOK, gin.H{"messages": []domain.Message{}})
+		return
+	}
+
+	// Reconstruct conversation from the last log:
+	// request_messages holds the full context sent to the LLM (all turns up to the last user message),
+	// and response_content holds the assistant reply for that turn.
+	last := logs[len(logs)-1]
+	var msgs []domain.Message
+	if err := json.Unmarshal(last.RequestMessages, &msgs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse session messages"})
+		return
+	}
+	msgs = append(msgs, domain.Message{Role: "assistant", Content: last.ResponseContent})
+
+	c.JSON(http.StatusOK, gin.H{"messages": msgs, "model": last.ModelID})
 }
