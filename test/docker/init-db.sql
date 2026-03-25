@@ -21,16 +21,20 @@ CREATE TABLE IF NOT EXISTS models (
 );
 
 INSERT INTO models (id, name, provider) VALUES
-  ('mock',              'Mock Provider',        'mock'),
-  ('gpt-4o',            'GPT-4o',               'openai'),
-  ('gpt-4o-mini',       'GPT-4o Mini',          'openai'),
-  ('claude-3-5-sonnet', 'Claude 3.5 Sonnet',    'anthropic'),
-  ('claude-3-haiku',    'Claude 3 Haiku',       'anthropic'),
-  ('claude-haiku-4-5',  'Claude Haiku 4.5',     'anthropic'),
-  ('deepseek-v3',       'DeepSeek V3',          'deepseek'),
-  ('deepseek-r1',       'DeepSeek R1',          'deepseek'),
-  ('qwen-max',          'Qwen Max',             'alibaba'),
-  ('qwen-plus',         'Qwen Plus',            'alibaba')
+  ('mock',                      'Mock Provider',              'mock'),
+  ('gpt-4o',                    'GPT-4o',                     'openai'),
+  ('gpt-4o-mini',               'GPT-4o Mini',                'openai'),
+  ('gpt-5',                     'GPT-5',                      'openai'),
+  ('claude-3-5-sonnet',         'Claude 3.5 Sonnet',          'anthropic'),
+  ('claude-3-haiku',            'Claude 3 Haiku',             'anthropic'),
+  ('claude-haiku-4-5',          'Claude Haiku 4.5',           'anthropic'),
+  ('claude-3-5-haiku-20241022', 'Claude 3.5 Haiku',           'anthropic'),
+  ('deepseek-v3',               'DeepSeek V3',                'deepseek'),
+  ('deepseek-r1',               'DeepSeek R1',                'deepseek'),
+  ('qwen-max',                  'Qwen Max',                   'alibaba'),
+  ('qwen-plus',                 'Qwen Plus',                  'alibaba'),
+  ('qwen3-max-2026-01-23',      'Qwen3 Max',                  'alibaba'),
+  ('qwen3.5-plus',              'Qwen3.5 Plus',               'alibaba')
 ON CONFLICT (id) DO NOTHING;
 
 -- 003: Create user_quotas table

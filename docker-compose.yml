@@ -1,0 +1,58 @@
+# 本地一键：PostgreSQL + API + 前端（浏览器打开 http://localhost:3000 ）
+# 仓库根目录: docker compose up --build -d
+# 停止: docker compose down
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: llmgw-postgres
+    environment:
+      POSTGRES_USER: llmgw
+      POSTGRES_PASSWORD: llmgw_test_password
+      POSTGRES_DB: llmgw_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./test/docker/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./test/docker/seed-test-data.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llmgw -d llmgw_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  llmgw:
+    build:
+      context: .
+      dockerfile: test/docker/Dockerfile
+    container_name: llmgw-server
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_DSN: "postgres://llmgw:llmgw_test_password@postgres:5432/llmgw_test?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/auth/login"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        VITE_ENABLE_DEV_LOGIN: "true"
+        NGINX_CONF: nginx.frontend.docker.conf
+    container_name: llmgw-web
+    ports:
+      - "3000:80"
+    depends_on:
+      llmgw:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

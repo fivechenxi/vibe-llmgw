@@ -1,0 +1,14 @@
+# 最小前端部署：在仓库根目录执行
+#   docker compose -f frontend-compose.yml up --build
+# 浏览器: http://localhost:3000 （后端需在宿主机 :8080）
+services:
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        VITE_ENABLE_DEV_LOGIN: "true"
+    ports:
+      - "3000:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

@@ -2,7 +2,7 @@
 
 ## 前置条件
 
-- Go 1.24+（路径 `/opt/homebrew/bin/go`）
+- Go 1.24+（确保 `go` 在 `PATH` 中可用）
 - 如需代理访问，配置 `HTTP_PROXY` 环境变量
 - Provider 集成测试需要对应的 API Key 环境变量；未设置时自动 skip
 - Repository 集成测试需要设置 `TEST_DATABASE_URL`；未设置时自动 skip
@@ -35,14 +35,14 @@
 cd /Users/didi/Documents/workspace/RiderProject/llmgw
 
 # 运行所有测试
-/opt/homebrew/bin/go test ./... -v
+go test ./... -v
 
 # 带竞态检测
-/opt/homebrew/bin/go test -race ./...
+go test -race ./...
 
 # 带覆盖率
-/opt/homebrew/bin/go test ./... -coverprofile=coverage.out
-/opt/homebrew/bin/go tool cover -html=coverage.out
+go test ./... -coverprofile=coverage.out
+go tool cover -html=coverage.out
 ```
 
 ---
@@ -65,7 +65,7 @@ cd /Users/didi/Documents/workspace/RiderProject/llmgw
 | `TestSignToken_DifferentUsersProduceDifferentTokens` | 不同用户生成不同 token |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/auth/ -v -timeout 30s
+go test ./internal/auth/ -v -timeout 30s
 ```
 
 ---
@@ -87,7 +87,7 @@ cd /Users/didi/Documents/workspace/RiderProject/llmgw
 | `TestJWTAuth_UserIDKey_IsConstant` | UserIDKey 常量正确 |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/middleware/ -v -timeout 30s
+go test ./internal/middleware/ -v -timeout 30s
 ```
 
 ---
@@ -111,7 +111,7 @@ cd /Users/didi/Documents/workspace/RiderProject/llmgw
 | `TestSelector_SessionSticky_ConcurrentSameSession` | 并发 sticky 一致性 |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/credential/ -v -run TestSelector -timeout 30s
+go test ./internal/credential/ -v -run TestSelector -timeout 30s
 ```
 
 ### Repository 集成测试（需要 PostgreSQL）
@@ -127,7 +127,7 @@ cd /Users/didi/Documents/workspace/RiderProject/llmgw
 
 ```bash
 TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
-/opt/homebrew/bin/go test ./internal/credential/ -v -run TestRepository -timeout 30s
+go test ./internal/credential/ -v -run TestRepository -timeout 30s
 ```
 
 ---
@@ -151,7 +151,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
 | `TestChatHandler_GetSession_EmptyLogs` | 空 session 正常返回 |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/chat/ -v -run TestChatHandler -timeout 30s
+go test ./internal/chat/ -v -run TestChatHandler -timeout 30s
 ```
 
 ### Repository 集成测试（需要 PostgreSQL）
@@ -168,7 +168,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
 
 ```bash
 TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
-/opt/homebrew/bin/go test ./internal/chat/ -v -run TestChatRepository -timeout 30s
+go test ./internal/chat/ -v -run TestChatRepository -timeout 30s
 ```
 
 ---
@@ -191,7 +191,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
 | `TestModelHandler_ListQuota_RepoError` | repo 错误返回 500 |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/model/ -v -run TestModelHandler -timeout 30s
+go test ./internal/model/ -v -run TestModelHandler -timeout 30s
 ```
 
 ### Repository 集成测试（需要 PostgreSQL）
@@ -206,7 +206,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
 
 ```bash
 TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
-/opt/homebrew/bin/go test ./internal/model/ -v -run TestModelRepository -timeout 30s
+go test ./internal/model/ -v -run TestModelRepository -timeout 30s
 ```
 
 ---
@@ -234,7 +234,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
 | `TestUser_Fields` | User 字段正确 |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/domain/ -v -timeout 30s
+go test ./internal/domain/ -v -timeout 30s
 ```
 
 ---
@@ -255,7 +255,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
 | `TestLoad_MultipleLoads` | 多次加载互不干扰 |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/config/ -v -timeout 30s
+go test ./internal/config/ -v -timeout 30s
 ```
 
 ---
@@ -271,7 +271,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
 | `TestConnect_Success` | 连接成功（需 TEST_DATABASE_URL） |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/db/ -v -timeout 30s
+go test ./internal/db/ -v -timeout 30s
 ```
 
 ---
@@ -299,7 +299,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
 | `TestService_CheckThenDeduct_QuotaDecreases` | Check 通过后 Deduct，stub 正确记录用量 |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/quota/ -v -run "TestUserQuota|TestService" -timeout 30s
+go test ./internal/quota/ -v -run "TestUserQuota|TestService" -timeout 30s
 ```
 
 ---
@@ -326,7 +326,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
 | `TestModule_TryDeduct_ConcurrentSafe` | TryDeduct 并发安全 |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/quota/ -v -run TestModule -timeout 30s
+go test ./internal/quota/ -v -run TestModule -timeout 30s
 ```
 
 ---
@@ -348,7 +348,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test" \
 
 ```bash
 TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test?sslmode=disable" \
-/opt/homebrew/bin/go test ./internal/quota/ -v -run TestRepository -timeout 30s
+go test ./internal/quota/ -v -run TestRepository -timeout 30s
 ```
 
 > 每个测试使用时间戳生成唯一 `user_id`，测试结束后自动清理插入的数据。
@@ -376,7 +376,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test?sslmode=disabl
 | `TestRouterRegister_Override` | Register 可覆盖已有映射 |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/proxy/ -v -timeout 30s
+go test ./internal/proxy/ -v -timeout 30s
 ```
 
 ---
@@ -397,7 +397,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test?sslmode=disabl
 | `TestIntegration_RouterRegisterCustomProvider` | Router.Register 注入的 provider 可通过完整 Handler 路径访问 |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/proxy/ -v -run TestIntegration -timeout 30s
+go test ./internal/proxy/ -v -run TestIntegration -timeout 30s
 ```
 
 ---
@@ -413,7 +413,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test?sslmode=disabl
 | `TestMockStream` | 流式分块、quota 扣减、日志保存 |
 
 ```bash
-/opt/homebrew/bin/go test ./internal/proxy/providers/ -v -run TestMock -timeout 30s
+go test ./internal/proxy/providers/ -v -run TestMock -timeout 30s
 ```
 
 ---
@@ -435,7 +435,7 @@ TEST_DATABASE_URL="postgres://user:pass@localhost:5432/llmgw_test?sslmode=disabl
 ```bash
 ANTHROPIC_API_KEY="..." \
 HTTP_PROXY="..." \
-/opt/homebrew/bin/go test ./internal/proxy/providers/ \
+go test ./internal/proxy/providers/ \
   -v -run TestAnthropic -timeout 60s
 ```
 
@@ -444,12 +444,12 @@ HTTP_PROXY="..." \
 ```bash
 # 仅测试同步接口
 ANTHROPIC_API_KEY="..." HTTP_PROXY="..." \
-/opt/homebrew/bin/go test ./internal/proxy/providers/ \
+go test ./internal/proxy/providers/ \
   -v -run TestAnthropicComplete$ -timeout 60s
 
 # 仅测试流式接口
 ANTHROPIC_API_KEY="..." HTTP_PROXY="..." \
-/opt/homebrew/bin/go test ./internal/proxy/providers/ \
+go test ./internal/proxy/providers/ \
   -v -run TestAnthropicStream -timeout 60s
 ```
 
@@ -487,7 +487,7 @@ PASS
 ```bash
 OPENAI_API_KEY="..." \
 HTTP_PROXY="..." \
-/opt/homebrew/bin/go test ./internal/proxy/providers/ \
+go test ./internal/proxy/providers/ \
   -v -run TestOpenAI -timeout 60s
 ```
 
@@ -522,7 +522,7 @@ HTTP_PROXY="..." \
 | `TestSystem_Integration_*` | 集成测试 |
 
 ```bash
-/opt/homebrew/bin/go test ./test/system/... -v -timeout 60s
+go test ./test/system/... -v -timeout 60s
 ```
 
 ---
@@ -551,14 +551,14 @@ HTTP_PROXY="..." \
 
 ```bash
 # 运行所有黑盒测试
-/opt/homebrew/bin/go test ./test/blackbox/ -v -timeout 60s
+go test ./test/blackbox/ -v -timeout 60s
 
 # 运行特定模块测试
-/opt/homebrew/bin/go test ./test/blackbox/ -v -run TestAuth -timeout 30s
-/opt/homebrew/bin/go test ./test/blackbox/ -v -run TestJWT -timeout 30s
-/opt/homebrew/bin/go test ./test/blackbox/ -v -run TestChat -timeout 30s
-/opt/homebrew/bin/go test ./test/blackbox/ -v -run TestRouter -timeout 30s
-/opt/homebrew/bin/go test ./test/blackbox/ -v -run TestCredential -timeout 30s
+go test ./test/blackbox/ -v -run TestAuth -timeout 30s
+go test ./test/blackbox/ -v -run TestJWT -timeout 30s
+go test ./test/blackbox/ -v -run TestChat -timeout 30s
+go test ./test/blackbox/ -v -run TestRouter -timeout 30s
+go test ./test/blackbox/ -v -run TestCredential -timeout 30s
 ```
 
 ### 测试用例设计文档
@@ -633,7 +633,7 @@ docker compose -f test/docker/docker-compose.test.yml up -d
 export TEST_API_BASE="http://localhost:8080"
 export TEST_JWT_SECRET="test-jwt-secret-for-blackbox-testing"
 export TEST_DATABASE_URL="postgres://llmgw:llmgw_test_password@localhost:5433/llmgw_test?sslmode=disable"
-/opt/homebrew/bin/go test ./test/e2e/... -v -timeout 60s
+go test ./test/e2e/... -v -timeout 60s
 ```
 
 ### 测试环境

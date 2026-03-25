@@ -44,7 +44,7 @@ func (s *stubRepo) TryDeduct(_ context.Context, _, _ string, tokens int) error {
 	return nil
 }
 
-func newService(repo quotaRepo) *Service {
+func newService(repo Repo) *Service {
 	return &Service{repo: repo}
 }
 
@@ -211,10 +211,11 @@ func TestService_TryDeduct_RepoError(t *testing.T) {
 // ---- Check → Deduct sequential flow ----
 
 func TestService_CheckThenDeduct_QuotaDecreases(t *testing.T) {
+	rd := time.Now().AddDate(0, 1, 0)
 	q := &domain.UserQuota{
 		QuotaTokens: 1000,
 		UsedTokens:  900,
-		ResetDate:   time.Now().AddDate(0, 1, 0),
+		ResetDate:   &rd,
 	}
 	repo := &stubRepo{quota: q}
 	svc := newService(repo)

@@ -18,16 +18,19 @@ sso:
 
 providers:
   openai:
-    api_key: "mock-openai-key"
+    api_key: "your-openai-compatible-key"
     base_url: "https://api.openai.com/v1"
   anthropic:
-    api_key: "mock-anthropic-key"
+    api_key: "your-anthropic-compatible-key"
+    base_url: ""                                   # leave empty to use https://api.anthropic.com
   deepseek:
-    api_key: "mock-deepseek-key"
+    api_key: ""
+    base_url: "https://api.deepseek.com/v1"
   alibaba:
-    api_key: "mock-alibaba-key"
+    api_key: "your-alibaba-compatible-key"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   baidu:
-    api_key: "mock-baidu-key"
-    secret_key: "mock-baidu-secret"
+    api_key: ""
+    secret_key: ""
 
 proxy: ""  # No proxy for test environment

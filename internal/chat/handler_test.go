@@ -123,8 +123,19 @@ func TestChatHandler_ListSessions_RepoError(t *testing.T) {
 
 func TestChatHandler_GetSession_OK(t *testing.T) {
 	sid := uuid.New()
+	reqMsgs, _ := json.Marshal([]domain.Message{
+		{Role: "user", Content: "hello"},
+	})
 	logs := []domain.ChatLog{
-		{ID: uuid.New(), UserID: "alice", SessionID: sid, ModelID: "gpt-4o", Status: "success"},
+		{
+			ID:              uuid.New(),
+			UserID:          "alice",
+			SessionID:       sid,
+			ModelID:         "gpt-4o",
+			Status:          "success",
+			RequestMessages: reqMsgs,
+			ResponseContent: "world",
+		},
 	}
 	stub := &stubChatRepo{logs: logs}
 	h := newHandlerWithStub(stub)
@@ -136,13 +147,23 @@ func TestChatHandler_GetSession_OK(t *testing.T) {
 		t.Errorf("status = %d, want 200; body: %s", w.Code, w.Body.String())
 	}
 	var body struct {
-		Messages []domain.ChatLog `json:"messages"`
+		Messages []domain.Message `json:"messages"`
+		Model    string           `json:"model"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(body.Messages) != 1 {
-		t.Errorf("messages count = %d, want 1", len(body.Messages))
+	if len(body.Messages) != 2 {
+		t.Errorf("messages count = %d, want 2", len(body.Messages))
+	}
+	if body.Messages[0].Role != "user" || body.Messages[0].Content != "hello" {
+		t.Errorf("first message mismatch: %+v", body.Messages[0])
+	}
+	if body.Messages[1].Role != "assistant" || body.Messages[1].Content != "world" {
+		t.Errorf("assistant message mismatch: %+v", body.Messages[1])
+	}
+	if body.Model != "gpt-4o" {
+		t.Errorf("model = %q, want gpt-4o", body.Model)
 	}
 }
 
@@ -197,5 +218,43 @@ func TestChatHandler_GetSession_EmptyLogs(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200 for empty session", w.Code)
+	}
+}
+
+func TestChatHandler_GetSession_InvalidRequestMessages_DegradesGracefully(t *testing.T) {
+	sid := uuid.New()
+	stub := &stubChatRepo{
+		logs: []domain.ChatLog{
+			{
+				ID:              uuid.New(),
+				UserID:          "alice",
+				SessionID:       sid,
+				ModelID:         "gpt-5",
+				Status:          "success",
+				RequestMessages: []byte("not-json"),
+				ResponseContent: "ignored",
+			},
+		},
+	}
+	h := newHandlerWithStub(stub)
+	c, w := ginContext(t, "alice", gin.Params{{Key: "session_id", Value: sid.String()}})
+
+	h.GetSession(c)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200 on malformed payload", w.Code)
+	}
+	var body struct {
+		Messages []domain.Message `json:"messages"`
+		Model    string           `json:"model"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Messages) != 0 {
+		t.Errorf("messages count = %d, want 0", len(body.Messages))
+	}
+	if body.Model != "gpt-5" {
+		t.Errorf("model = %q, want gpt-5", body.Model)
 	}
 }

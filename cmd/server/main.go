@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,9 @@ func main() {
 	}
 	defer database.Close()
 
+	// Sync API keys from config into model_credentials table
+	credential.SyncFromConfig(context.Background(), cfg, database)
+
 	// Repositories & Services
 	quotaRepo := quota.NewRepository(database)
 	quotaSvc := quota.NewService(quotaRepo)
@@ -46,6 +50,9 @@ func main() {
 	r.GET("/auth/login", authHandler.Login)
 	r.GET("/auth/callback", authHandler.Callback)
 	r.POST("/auth/logout", authHandler.Logout)
+	if cfg.Env != "production" {
+		r.POST("/auth/dev-login", authHandler.DevLogin)
+	}
 
 	// Authenticated routes
 	api := r.Group("/api", middleware.JWTAuth(cfg.JWT.Secret))

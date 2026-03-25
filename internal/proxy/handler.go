@@ -66,20 +66,20 @@ func (h *Handler) Chat(c *gin.Context) {
 		return
 	}
 
-	// 1. Check quota
+	// 1. Resolve provider first so unknown models return 400 instead of quota DB errors.
+	provider, err := h.router.Get(req.Model)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported model"})
+		return
+	}
+
+	// 2. Check quota
 	if err := h.quotaSvc.Check(c.Request.Context(), userID, req.Model); err != nil {
 		if errors.Is(err, quota.ErrQuotaExceeded) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "quota exceeded"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// 2. Route to provider
-	provider, err := h.router.Get(req.Model)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported model"})
 		return
 	}
 

@@ -1,0 +1,16 @@
+# 仅前端：静态资源 + 反代到本机后端（需先在宿主机启动 API，监听 8080）
+# 用法（在仓库根目录）:
+#   docker compose -f deploy/docker-compose.frontend.yml up --build
+# 浏览器访问: http://localhost:3000
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        VITE_ENABLE_DEV_LOGIN: "true"
+    ports:
+      - "3000:80"
+    extra_hosts:
+      # Linux 上让 host.docker.internal 指向宿主机（macOS/Windows Docker Desktop 一般自带）
+      - "host.docker.internal:host-gateway"

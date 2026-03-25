@@ -12,7 +12,10 @@ ON CONFLICT (id) DO NOTHING;
 -- Alice has quota for mock and gpt-4o
 INSERT INTO user_quotas (user_id, model_id, quota_tokens, used_tokens) VALUES
   ('alice', 'mock', 1000000, 0),
-  ('alice', 'gpt-4o', 500000, 10000)
+  ('alice', 'gpt-5', 500000, 10000),
+  ('alice', 'claude-3-5-haiku-20241022', 1000000, 0),
+  ('alice', 'qwen3-max-2026-01-23', 1000000, 0),
+  ('alice', 'qwen3.5-plus', 1000000, 0)
 ON CONFLICT (user_id, model_id) DO NOTHING;
 
 -- Bob has exhausted quota for mock

@@ -96,9 +96,9 @@ func (f *fakeRepo) UsedTokens(userID, modelID string) int64 {
 	return f.quotas[f.key(userID, modelID)].UsedTokens
 }
 
-// newModuleService wires Service with the fake repo (bypasses NewService's *Repository type).
+// newModuleService wires Service with the fake in-memory repo.
 func newModuleService(repo *fakeRepo) *Service {
-	return &Service{repo: repo}
+	return NewService(repo)
 }
 
 // ---- module tests ----
@@ -406,9 +406,9 @@ func TestModule_TryDeduct_ConcurrentSafe(t *testing.T) {
 	}
 }
 
-// fakeRepo also needs to satisfy quotaRepo for the compiler —
+// fakeRepo also needs to satisfy Repo for the compiler —
 // verify it at compile time.
-var _ quotaRepo = (*fakeRepo)(nil)
+var _ Repo = (*fakeRepo)(nil)
 
 // Ensure test user names are always unique across parallel test runs.
 var _ = fmt.Sprintf // keep import used
