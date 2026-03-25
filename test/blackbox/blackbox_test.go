@@ -128,8 +128,8 @@ func (r *mockQuotaRepo) ListByUser(_ context.Context, userID string) ([]domain.U
 	return result, nil
 }
 
-// Ensure mockQuotaRepo satisfies quota.Repository interface
-var _ quota.Repository = (*mockQuotaRepo)(nil)
+// Ensure mockQuotaRepo satisfies quota.Repo
+var _ quota.Repo = (*mockQuotaRepo)(nil)
 
 // mockChatSaver is an in-memory chat log saver for testing.
 type mockChatSaver struct {
@@ -365,11 +365,8 @@ func newTestEnv(t *testing.T, opts ...func(*testEnv)) *testEnv {
 	// Create auth handler
 	authHandler := auth.NewHandler(cfg, nil)
 
-	// Build router
+	// Build router: public auth endpoints must not use JWT middleware.
 	r := gin.New()
-	r.Use(middleware.JWTAuth(testJWTSecret))
-
-	// Auth routes (no auth required - placed before JWT middleware applies)
 	authGroup := r.Group("")
 	{
 		authGroup.GET("/auth/login", authHandler.Login)
@@ -377,8 +374,8 @@ func newTestEnv(t *testing.T, opts ...func(*testEnv)) *testEnv {
 		authGroup.POST("/auth/logout", authHandler.Logout)
 	}
 
-	// API routes (auth required)
 	apiGroup := r.Group("/api")
+	apiGroup.Use(middleware.JWTAuth(testJWTSecret))
 	{
 		apiGroup.GET("/models", env.listModels)
 		apiGroup.GET("/quota", env.listQuota)

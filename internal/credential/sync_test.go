@@ -13,8 +13,9 @@ type fakeTx struct {
 	args  [][]any
 }
 
-func (f *fakeTx) Commit(ctx context.Context) error   { return nil }
-func (f *fakeTx) Rollback(ctx context.Context) error { return nil }
+func (f *fakeTx) Begin(ctx context.Context) (pgx.Tx, error) { return f, nil }
+func (f *fakeTx) Commit(ctx context.Context) error          { return nil }
+func (f *fakeTx) Rollback(ctx context.Context) error        { return nil }
 func (f *fakeTx) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
 	return 0, nil
 }

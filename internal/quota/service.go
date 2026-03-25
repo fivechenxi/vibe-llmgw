@@ -9,9 +9,9 @@ import (
 
 var ErrQuotaExceeded = errors.New("quota exceeded")
 
-// quotaRepo is the narrow interface Service needs from the persistence layer.
-// *Repository satisfies it; tests can substitute a stub.
-type quotaRepo interface {
+// Repo is the persistence contract required by Service.
+// *Repository satisfies it; external tests may substitute mocks.
+type Repo interface {
 	Get(ctx context.Context, userID, modelID string) (*domain.UserQuota, error)
 	Deduct(ctx context.Context, userID, modelID string, tokens int) error
 	// TryDeduct atomically checks remaining quota and deducts in one operation.
@@ -20,10 +20,10 @@ type quotaRepo interface {
 }
 
 type Service struct {
-	repo quotaRepo
+	repo Repo
 }
 
-func NewService(repo *Repository) *Service {
+func NewService(repo Repo) *Service {
 	return &Service{repo: repo}
 }
 
