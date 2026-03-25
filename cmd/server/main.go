@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +24,9 @@ func main() {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 	defer database.Close()
+
+	// Sync API keys from config into model_credentials table
+	credential.SyncFromConfig(context.Background(), cfg, database)
 
 	// Repositories & Services
 	quotaRepo := quota.NewRepository(database)

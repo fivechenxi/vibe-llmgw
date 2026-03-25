@@ -2,6 +2,7 @@ package credential
 
 import (
 	"context"
+	"fmt"
 	"hash/fnv"
 	"sync"
 	"sync/atomic"
@@ -41,6 +42,9 @@ func (s *RoundRobinSelector) Pick(ctx context.Context, modelID, sessionID string
 	creds, err := s.repo.ListActive(ctx, modelID)
 	if err != nil {
 		return nil, err
+	}
+	if len(creds) == 0 {
+		return nil, fmt.Errorf("no active credentials for model %q", modelID)
 	}
 
 	var idx uint64
